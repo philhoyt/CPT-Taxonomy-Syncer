@@ -36,28 +36,28 @@ Create your own implementation in your theme's `functions.php` or in your own pl
 See the included `example.php` file for a complete implementation example. Here's how to implement it:
 
 ```php
-// Make sure the plugin is loaded
-if (!class_exists('CPT_Taxonomy_Syncer')) {
-    return;
+// Make sure the plugin is loaded.
+if ( ! class_exists( 'CPT_Taxonomy_Syncer' ) ) {
+	return;
 }
 
-// Create your own implementation class
+// Create your own implementation class.
 class My_CPT_Taxonomy_Syncer_Implementation {
-    private $syncer;
-    
-    public function __construct() {
-        // Priority 20 ensures this runs after post types are registered
-        add_action('init', array($this, 'init'), 20);
-    }
-    
-    public function init() {
-        // Replace 'your_cpt' with your custom post type slug
-        // Replace 'your_taxonomy' with your taxonomy slug
-        $this->syncer = new CPT_Taxonomy_Syncer('your_cpt', 'your_taxonomy');
-    }
+	private $syncer;
+
+	public function __construct() {
+		// Priority 20 ensures this runs after post types are registered.
+		add_action( 'init', array( $this, 'init' ), 20) ;
+	}
+
+	public function init() {
+		// Replace 'your_cpt' with your custom post type slug.
+		// Replace 'your_taxonomy' with your taxonomy slug.
+		$this->syncer = new CPT_Taxonomy_Syncer('your_cpt', 'your_taxonomy');
+	}
 }
 
-// Initialize your implementation
+// Initialize your implementation.
 new My_CPT_Taxonomy_Syncer_Implementation();
 ```
 
