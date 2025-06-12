@@ -56,19 +56,17 @@ class CPT_Taxonomy_Syncer {
 	 * Initialize hooks
 	 */
 	private function init() {
-		// Hook into post creation to sync to taxonomy - use wp_after_insert_post instead of save_post
-		// This ensures we run after all WordPress core operations are complete
-		add_action('wp_after_insert_post', array($this, 'sync_post_to_term'), 20, 3);
+		// Hook into post creation to sync to taxonomy
+		add_action('save_post_' . $this->cpt_slug, array($this, 'sync_post_to_term'), 10, 3);
 		
-		// Hook into term creation to sync to post - use wp_insert_term instead of created_taxonomy
-		// This avoids interfering with the taxonomy UI
-		add_action('wp_insert_term', array($this, 'maybe_sync_term_to_post'), 20, 3);
+		// Hook into term creation to sync to post
+		add_action('created_' . $this->taxonomy_slug, array($this, 'sync_term_to_post'), 10, 2);
 		
-		// Hook into term update to sync to post - use wp_update_term instead of edited_taxonomy
-		add_action('wp_update_term', array($this, 'maybe_sync_term_update_to_post'), 20, 3);
+		// Hook into term update to sync to post
+		add_action('edited_' . $this->taxonomy_slug, array($this, 'sync_term_update_to_post'), 10, 2);
 		
-		// Hook into post update to sync to term - use wp_after_insert_post for updates too
-		add_action('wp_after_insert_post', array($this, 'sync_post_update_to_term'), 20, 3);
+		// Hook into post update to sync to term
+		add_action('post_updated', array($this, 'sync_post_update_to_term'), 10, 3);
 		
 		// Hook into post deletion to sync to term
 		add_action('before_delete_post', array($this, 'sync_post_deletion_to_term'), 10, 1);
@@ -128,47 +126,7 @@ class CPT_Taxonomy_Syncer {
 	}
 	
 	/**
-	 * Check if a term belongs to our taxonomy and sync it to a post if it does
-	 * 
-	 * @param int $term_id The term ID
-	 * @param int $tt_id The term taxonomy ID
-	 * @param array $args The arguments passed to wp_insert_term
-	 */
-	public function maybe_sync_term_to_post($term_id, $tt_id, $args) {
-		// Only proceed if this is our taxonomy
-		if (!isset($args['taxonomy']) || $args['taxonomy'] !== $this->taxonomy_slug) {
-			return;
-		}
-		
-		// Get the term
-		$term = get_term($term_id, $this->taxonomy_slug);
-		
-		if (is_wp_error($term)) {
-			return;
-		}
-		
-		// Check if post already exists with this title
-		$existing_posts = get_posts(array(
-			'post_type' => $this->cpt_slug,
-			'post_status' => 'publish',
-			'title' => $term->name,
-			'posts_per_page' => 1
-		));
-		
-		if (empty($existing_posts)) {
-			// Create new post
-			wp_insert_post(array(
-				'post_title' => $term->name,
-				'post_name' => $term->slug,
-				'post_content' => $term->description ?: '',
-				'post_status' => 'publish',
-				'post_type' => $this->cpt_slug
-			));
-		}
-	}
-	
-	/**
-	 * Legacy method for backward compatibility
+	 * Sync term to post when a term is created
 	 * 
 	 * @param int $term_id The term ID
 	 * @param int $tt_id The term taxonomy ID
@@ -202,164 +160,21 @@ class CPT_Taxonomy_Syncer {
 	}
 	
 	/**
-	 * Check if a term update belongs to our taxonomy and sync it to a post if it does
-	 * 
-	 * @param array $data The term data
-	 * @param int $term_id The term ID
-	 * @param array $args The arguments passed to wp_update_term
-	 */
-	public function maybe_sync_term_update_to_post($data, $term_id, $args) {
-		// Only proceed if this is our taxonomy
-		if (!isset($args['taxonomy']) || $args['taxonomy'] !== $this->taxonomy_slug) {
-			return;
-		}
-		
-		// Get the term
-		$term = get_term($term_id, $this->taxonomy_slug);
-		
-		if (is_wp_error($term)) {
-			return;
-		}
-		
-		// Find posts with matching title
-		$matching_posts = get_posts(array(
-			'post_type' => $this->cpt_slug,
-			'post_status' => 'publish',
-			'posts_per_page' => -1,
-			'meta_query' => array(
-				array(
-					'key' => '_term_id_' . $this->taxonomy_slug,
-					'value' => $term_id,
-					'compare' => '='
-				)
-			)
-		));
-		
-		if (!empty($matching_posts)) {
-			// Update existing posts
-			foreach ($matching_posts as $post) {
-				wp_update_post(array(
-					'ID' => $post->ID,
-					'post_title' => $term->name,
-					'post_name' => $term->slug,
-					'post_content' => $term->description ?: $post->post_content
-				));
-			}
-		} else {
-			// Try to find posts with matching title
-			$title_matching_posts = get_posts(array(
-				'post_type' => $this->cpt_slug,
-				'post_status' => 'publish',
-				'title' => $term->name,
-				'posts_per_page' => -1
-			));
-			
-			if (!empty($title_matching_posts)) {
-				// Update existing posts
-				foreach ($title_matching_posts as $post) {
-					// Store term ID as post meta for future reference
-					update_post_meta($post->ID, '_term_id_' . $this->taxonomy_slug, $term_id);
-					
-					wp_update_post(array(
-						'ID' => $post->ID,
-						'post_title' => $term->name,
-						'post_name' => $term->slug,
-						'post_content' => $term->description ?: $post->post_content
-					));
-				}
-			} else {
-				// Create new post
-				$post_id = wp_insert_post(array(
-					'post_title' => $term->name,
-					'post_name' => $term->slug,
-					'post_content' => $term->description ?: '',
-					'post_status' => 'publish',
-					'post_type' => $this->cpt_slug
-				));
-				
-				// Store term ID as post meta for future reference
-				update_post_meta($post_id, '_term_id_' . $this->taxonomy_slug, $term_id);
-			}
-		}
-	}
-	
-	/**
-	 * Legacy method for backward compatibility
+	 * Sync term update to post
 	 * 
 	 * @param int $term_id The term ID
 	 * @param int $tt_id The term taxonomy ID
 	 */
 	public function sync_term_update_to_post($term_id, $tt_id) {
-		// Get the term
+		// Get the updated term
 		$term = get_term($term_id, $this->taxonomy_slug);
-		
-		if (is_wp_error($term)) {
+		if (is_wp_error($term) || !$term) {
 			return;
 		}
 		
-		// Find posts with matching title
-		$matching_posts = get_posts(array(
-			'post_type' => $this->cpt_slug,
-			'post_status' => 'publish',
-			'posts_per_page' => -1,
-			'meta_query' => array(
-				array(
-					'key' => '_term_id_' . $this->taxonomy_slug,
-					'value' => $term_id,
-					'compare' => '='
-				)
-			)
-		));
-		
-		if (!empty($matching_posts)) {
-			// Update existing posts
-			foreach ($matching_posts as $post) {
-				wp_update_post(array(
-					'ID' => $post->ID,
-					'post_title' => $term->name,
-					'post_name' => $term->slug,
-					'post_content' => $term->description ?: $post->post_content
-				));
-			}
-		} else {
-			// Try to find posts with matching title
-			$title_matching_posts = get_posts(array(
-				'post_type' => $this->cpt_slug,
-				'post_status' => 'publish',
-				'title' => $term->name,
-				'posts_per_page' => -1
-			));
-			
-			if (!empty($title_matching_posts)) {
-				// Update existing posts
-				foreach ($title_matching_posts as $post) {
-					// Store term ID as post meta for future reference
-					update_post_meta($post->ID, '_term_id_' . $this->taxonomy_slug, $term_id);
-					
-					wp_update_post(array(
-						'ID' => $post->ID,
-						'post_title' => $term->name,
-						'post_name' => $term->slug,
-						'post_content' => $term->description ?: $post->post_content
-					));
-				}
-			} else {
-				// Create new post
-				$post_id = wp_insert_post(array(
-					'post_title' => $term->name,
-					'post_name' => $term->slug,
-					'post_content' => $term->description ?: '',
-					'post_status' => 'publish',
-					'post_type' => $this->cpt_slug
-				));
-				
-				// Store term ID as post meta for future reference
-				update_post_meta($post_id, '_term_id_' . $this->taxonomy_slug, $term_id);
-			}
-		}
-	}
-	
-
+		// Find posts with matching title (based on the old term name)
+		// We need to use a custom query because we don't know the old term name
+		// So we'll update all posts of our CPT that are linked to this term
 		$args = array(
 			'post_type' => $this->cpt_slug,
 			'post_status' => 'publish',
