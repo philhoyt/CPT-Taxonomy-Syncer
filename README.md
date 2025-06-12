@@ -29,7 +29,18 @@ This plugin provides a reusable class that creates a complete two-way sync betwe
 
 ## Usage
 
-### Basic Setup
+### Admin UI Setup (Recommended)
+
+The easiest way to configure CPT-Taxonomy Syncer is through the admin interface:
+
+1. Go to **Settings → CPT-Tax Syncer** in your WordPress admin
+2. Click **Add New Pair** to create a new CPT/taxonomy pair
+3. Select the custom post type and taxonomy you want to sync
+4. Click **Save Changes**
+
+You can add multiple pairs and enable/disable them as needed without writing any code.
+
+### Programmatic Setup
 
 Create your own implementation in your theme's `functions.php` or in your own plugin file.
 
