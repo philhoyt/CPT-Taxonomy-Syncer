@@ -76,104 +76,14 @@ function cpt_taxonomy_syncer_enqueue_scripts() {
             }
         }
         
-        // If we found a matching pair, enqueue the script
-        if ($current_pair) {
-            wp_enqueue_script(
-                'cpt-tax-syncer-block-editor',
-                CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/block-editor.js',
-                array('wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-data'),
-                CPT_TAXONOMY_SYNCER_VERSION,
-                true
-            );
-            
-            // Pass data to the script
-            wp_localize_script(
-                'cpt-tax-syncer-block-editor',
-                'cptTaxSyncerData',
-                array(
-                    'taxonomySlug' => $current_pair['taxonomy_slug'],
-                    'restBase' => rest_url('cpt-tax-syncer/v1'),
-                    'nonce' => wp_create_nonce('wp_rest')
-                )
-            );
-        }
+        // No need to enqueue block-editor.js anymore as we've resolved the REST API issues
     }
 }
 
 add_action('admin_enqueue_scripts', 'cpt_taxonomy_syncer_enqueue_scripts');
 
-/**
- * Register REST API endpoint for logging JavaScript errors
- */
-function cpt_tax_syncer_register_js_error_endpoint() {
-    register_rest_route('cpt-tax-syncer/v1', '/log-error', array(
-        'methods' => 'POST',
-        'callback' => 'cpt_tax_syncer_log_js_error',
-        'permission_callback' => function() {
-            return current_user_can('edit_posts');
-        },
-    ));
-}
-add_action('rest_api_init', 'cpt_tax_syncer_register_js_error_endpoint');
+// JavaScript error logging functions have been removed as they are no longer needed
+// Now that we've resolved the slug collision issue between CPT and taxonomy
 
-/**
- * Log JavaScript errors from the block editor
- *
- * @param WP_REST_Request $request The request object
- * @return WP_REST_Response The response object
- */
-function cpt_tax_syncer_log_js_error($request) {
-    $message = $request->get_param('message');
-    $stack = $request->get_param('stack');
-    $url = $request->get_param('url');
-    
-    error_log(sprintf(
-        'CPT-Taxonomy Syncer JS Error: %s\nStack: %s\nURL: %s',
-        $message,
-        $stack,
-        $url
-    ));
-    
-    return new WP_REST_Response(array(
-        'success' => true,
-        'message' => 'Error logged successfully',
-    ), 200);
-}
-
-/**
- * Prepare term response for REST API
- * 
- * Ensures all required fields are present in the term response
- * 
- * @param WP_REST_Response $response The response object
- * @param WP_Term $term The term object
- * @param WP_REST_Request $request The request object
- * @return WP_REST_Response The modified response
- */
-function cpt_tax_syncer_prepare_term_response($response, $term, $request) {
-    $data = $response->get_data();
-    
-    // Ensure all required fields are present
-    $required_fields = array(
-        'id' => $term->term_id,
-        'name' => $term->name,
-        'slug' => $term->slug,
-        'taxonomy' => $term->taxonomy,
-        'link' => get_term_link($term),
-        'count' => $term->count,
-        'description' => $term->description,
-    );
-    
-    foreach ($required_fields as $field => $value) {
-        if (!isset($data[$field])) {
-            $data[$field] = $value;
-        }
-    }
-    
-    $response->set_data($data);
-    
-    return $response;
-}
-
-// Add filter for term responses
-add_filter('rest_prepare_term', 'cpt_tax_syncer_prepare_term_response', 10, 3);
+// Term response preparation function has been removed as it is no longer needed
+// Now that we've resolved the slug collision issue between CPT and taxonomy

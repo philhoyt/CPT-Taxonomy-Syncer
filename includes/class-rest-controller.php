@@ -315,7 +315,7 @@ class CPT_Tax_Syncer_REST_Controller {
     /**
      * Prepare term response for REST API
      * 
-     * Ensures all required fields are present in the term response
+     * This is a lightweight hook to ensure term responses have consistent formatting.
      * 
      * @param WP_REST_Response $response The response object
      * @param WP_Term $term The term object
@@ -323,39 +323,11 @@ class CPT_Tax_Syncer_REST_Controller {
      * @return WP_REST_Response The modified response
      */
     public function prepare_term_response($response, $term, $request) {
-        // Process all taxonomies to ensure compatibility
-        // This helps prevent JS errors in the block editor
+        // Since we now know the CPT and taxonomy have different slugs,
+        // we don't need extensive workarounds here anymore.
+        // Just ensure the ID is an integer for consistency
         
         $data = $response->get_data();
-        
-        // Ensure all required fields are present
-        $required_fields = array(
-            'id' => $term->term_id,
-            'name' => $term->name,
-            'slug' => $term->slug,
-            'taxonomy' => $term->taxonomy,
-            'link' => get_term_link($term),
-            'count' => $term->count,
-            'description' => $term->description,
-        );
-        
-        foreach ($required_fields as $field => $value) {
-            if (!isset($data[$field])) {
-                $data[$field] = $value;
-            }
-        }
-        
-        // Additional fields that might be needed by the block editor
-        $additional_fields = array(
-            'parent' => isset($term->parent) ? $term->parent : 0,
-            'meta' => array(),
-        );
-        
-        foreach ($additional_fields as $field => $value) {
-            if (!isset($data[$field])) {
-                $data[$field] = $value;
-            }
-        }
         
         // Ensure the id is always an integer
         if (isset($data['id']) && !is_int($data['id'])) {
