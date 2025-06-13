@@ -3,7 +3,7 @@
  * Plugin Name: CPT-Taxonomy Syncer
  * Description: Automatically syncs a custom post type with a taxonomy
  * Version: 2.0.0
- * Author: Your Name
+ * Author: Phil Hoyt
  * License: GPL-2.0+
  */
 
@@ -75,15 +75,7 @@ function cpt_taxonomy_syncer_enqueue_scripts() {
                 break;
             }
         }
-        
-        // No need to enqueue block-editor.js anymore as we've resolved the REST API issues
     }
 }
 
 add_action('admin_enqueue_scripts', 'cpt_taxonomy_syncer_enqueue_scripts');
-
-// JavaScript error logging functions have been removed as they are no longer needed
-// Now that we've resolved the slug collision issue between CPT and taxonomy
-
-// Term response preparation function has been removed as it is no longer needed
-// Now that we've resolved the slug collision issue between CPT and taxonomy
