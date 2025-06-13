@@ -26,11 +26,18 @@ class CPT_Taxonomy_Syncer {
     private $taxonomy_slug;
     
     /**
-     * Static instance tracker for singleton pattern
+     * Static array of instances (for singleton pattern)
      * 
      * @var array
      */
     private static $instances = array();
+    
+    /**
+     * Flag to prevent infinite recursion during deletion
+     * 
+     * @var bool
+     */
+    private static $is_deleting = false;
     
     /**
      * Constructor
@@ -280,6 +287,11 @@ class CPT_Taxonomy_Syncer {
      * @param int $post_id The post ID
      */
     public function sync_post_deletion_to_term($post_id) {
+        // Prevent infinite recursion
+        if (self::$is_deleting) {
+            return;
+        }
+        
         // Only process our CPT
         if (get_post_type($post_id) !== $this->cpt_slug) {
             return;
@@ -291,6 +303,9 @@ class CPT_Taxonomy_Syncer {
             return;
         }
         
+        // Set the deletion flag
+        self::$is_deleting = true;
+        
         // Find the corresponding term by name
         $term = get_term_by('name', $post->post_title, $this->taxonomy_slug);
         
@@ -298,6 +313,9 @@ class CPT_Taxonomy_Syncer {
         if ($term && !is_wp_error($term)) {
             wp_delete_term($term->term_id, $this->taxonomy_slug);
         }
+        
+        // Reset the deletion flag
+        self::$is_deleting = false;
     }
     
     /**
@@ -307,10 +325,18 @@ class CPT_Taxonomy_Syncer {
      * @param string $taxonomy The taxonomy slug
      */
     public function sync_term_deletion_to_post($term_id, $taxonomy) {
+        // Prevent infinite recursion
+        if (self::$is_deleting) {
+            return;
+        }
+        
         // Only process our taxonomy
         if ($taxonomy !== $this->taxonomy_slug) {
             return;
         }
+        
+        // Set the deletion flag
+        self::$is_deleting = true;
         
         // Get the associated post ID from term meta
         $post_id = get_term_meta($term_id, '_post_id_' . $this->cpt_slug, true);
@@ -319,5 +345,8 @@ class CPT_Taxonomy_Syncer {
         if ($post_id) {
             wp_delete_post($post_id, true);
         }
+        
+        // Reset the deletion flag
+        self::$is_deleting = false;
     }
 }
