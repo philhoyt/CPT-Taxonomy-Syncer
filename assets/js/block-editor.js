@@ -206,6 +206,9 @@
         
         console.log('CPT-Taxonomy Syncer: Patching term selector');
         
+        // Patch the FormTokenField component to prevent toLocaleLowerCase error
+        patchFormTokenField();
+        
         // Get the original selector
         const originalGetEntityRecords = wp.data.select('core').getEntityRecords;
         
@@ -247,5 +250,66 @@
                 return originalGetEntityRecords.apply(this, args);
             };
         }
+    }
+    
+    /**
+     * Patch the FormTokenField component to prevent toLocaleLowerCase error
+     */
+    function patchFormTokenField() {
+        // Wait for the components to be available
+        if (!wp.components || !wp.components.FormTokenField) {
+            console.log('CPT-Taxonomy Syncer: wp.components.FormTokenField not available yet');
+            setTimeout(patchFormTokenField, 500);
+            return;
+        }
+        
+        console.log('CPT-Taxonomy Syncer: Patching FormTokenField component');
+        
+        // Monkey patch the FormTokenField component
+        const originalFormTokenField = wp.components.FormTokenField;
+        
+        wp.components.FormTokenField = function(props) {
+            // Create a safe copy of the suggestions
+            const safeSuggestions = Array.isArray(props.suggestions) ? 
+                props.suggestions.map(suggestion => {
+                    // If suggestion is an object, ensure it has a name property
+                    if (suggestion && typeof suggestion === 'object') {
+                        return {
+                            ...suggestion,
+                            name: suggestion.name || suggestion.label || suggestion.value || ''
+                        };
+                    }
+                    // If suggestion is a string, return it directly
+                    return suggestion || '';
+                }) : 
+                [];
+            
+            // Create a safe copy of the value
+            const safeValue = Array.isArray(props.value) ? 
+                props.value.map(value => {
+                    // If value is an object, ensure it has required properties
+                    if (value && typeof value === 'object') {
+                        return {
+                            ...value,
+                            id: value.id || 0,
+                            name: value.name || '',
+                            slug: value.slug || ''
+                        };
+                    }
+                    // If value is a string, return it directly
+                    return value || '';
+                }) : 
+                [];
+            
+            // Create a safe copy of the props
+            const safeProps = {
+                ...props,
+                suggestions: safeSuggestions,
+                value: safeValue
+            };
+            
+            // Call the original component with safe props
+            return originalFormTokenField(safeProps);
+        };
     }
 })();

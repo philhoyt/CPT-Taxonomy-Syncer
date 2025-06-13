@@ -43,7 +43,7 @@ class CPT_Taxonomy_Syncer {
         $this->taxonomy_slug = $taxonomy_slug;
         
         // Initialize hooks
-        $this->init();
+        $this->init_hooks();
     }
     
     /**
@@ -66,7 +66,13 @@ class CPT_Taxonomy_Syncer {
     /**
      * Initialize hooks
      */
-    private function init() {
+    private function init_hooks() {
+        // Ensure taxonomy has REST API support - run at multiple points to ensure it catches the taxonomy
+        add_action('init', array($this, 'ensure_taxonomy_rest_support'), 20); // Early
+        add_action('init', array($this, 'ensure_taxonomy_rest_support'), 999); // Late
+        add_action('registered_taxonomy', array($this, 'ensure_taxonomy_rest_support')); // When any taxonomy is registered
+        add_action('rest_api_init', array($this, 'ensure_taxonomy_rest_support'), 5); // Before REST API routes are registered
+        
         // Hook into post creation to sync to taxonomy
         add_action('save_post_' . $this->cpt_slug, array($this, 'sync_post_to_term'), 10, 3);
         
@@ -84,6 +90,67 @@ class CPT_Taxonomy_Syncer {
         
         // Hook into term deletion to sync to post
         add_action('pre_delete_term', array($this, 'sync_term_deletion_to_post'), 10, 2);
+    }
+    
+    /**
+     * Ensure taxonomy has REST API support
+     * 
+     * This function ensures that the taxonomy has REST API support by modifying
+     * its registration arguments if necessary.
+     * 
+     * @param string $taxonomy Optional. The taxonomy being registered (from registered_taxonomy hook)
+     */
+    public function ensure_taxonomy_rest_support($taxonomy = '') {
+        global $wp_taxonomies;
+        
+        // If this is called from the registered_taxonomy hook and it's not our taxonomy, ignore it
+        if (!empty($taxonomy) && $taxonomy !== $this->taxonomy_slug) {
+            return;
+        }
+        
+        // If our taxonomy doesn't exist yet, try to register it
+        if (!isset($wp_taxonomies[$this->taxonomy_slug])) {
+            // This is a fallback - ideally the taxonomy should be registered by the theme or another plugin
+            if (function_exists('register_taxonomy')) {
+                register_taxonomy($this->taxonomy_slug, $this->cpt_slug, array(
+                    'label' => ucfirst($this->taxonomy_slug),
+                    'hierarchical' => true,
+                    'show_ui' => true,
+                    'show_admin_column' => true,
+                    'query_var' => true,
+                    'show_in_rest' => true,
+                    'rest_base' => $this->taxonomy_slug,
+                    'rest_controller_class' => 'WP_REST_Terms_Controller',
+                ));
+                
+                // If we just registered it, we're done
+                return;
+            } else {
+                // Can't register it yet
+                return;
+            }
+        }
+        
+        // Force REST API support
+        $wp_taxonomies[$this->taxonomy_slug]->show_in_rest = true;
+        
+        // Set REST base to taxonomy slug if not already set
+        if (!isset($wp_taxonomies[$this->taxonomy_slug]->rest_base) || empty($wp_taxonomies[$this->taxonomy_slug]->rest_base)) {
+            $wp_taxonomies[$this->taxonomy_slug]->rest_base = $this->taxonomy_slug;
+        }
+        
+        // Set REST controller class if not already set
+        if (!isset($wp_taxonomies[$this->taxonomy_slug]->rest_controller_class) || empty($wp_taxonomies[$this->taxonomy_slug]->rest_controller_class)) {
+            $wp_taxonomies[$this->taxonomy_slug]->rest_controller_class = 'WP_REST_Terms_Controller';
+        }
+        
+        // Debug output to help diagnose REST API issues
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('CPT-Taxonomy Syncer: Ensuring REST API support for ' . $this->taxonomy_slug);
+            error_log('CPT-Taxonomy Syncer: show_in_rest = ' . ($wp_taxonomies[$this->taxonomy_slug]->show_in_rest ? 'true' : 'false'));
+            error_log('CPT-Taxonomy Syncer: rest_base = ' . $wp_taxonomies[$this->taxonomy_slug]->rest_base);
+            error_log('CPT-Taxonomy Syncer: rest_controller_class = ' . $wp_taxonomies[$this->taxonomy_slug]->rest_controller_class);
+        }
     }
     
     /**

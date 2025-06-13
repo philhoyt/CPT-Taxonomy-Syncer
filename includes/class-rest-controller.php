@@ -323,10 +323,8 @@ class CPT_Tax_Syncer_REST_Controller {
      * @return WP_REST_Response The modified response
      */
     public function prepare_term_response($response, $term, $request) {
-        // Only process our taxonomy
-        if ($term->taxonomy !== $this->taxonomy_slug) {
-            return $response;
-        }
+        // Process all taxonomies to ensure compatibility
+        // This helps prevent JS errors in the block editor
         
         $data = $response->get_data();
         
@@ -345,6 +343,23 @@ class CPT_Tax_Syncer_REST_Controller {
             if (!isset($data[$field])) {
                 $data[$field] = $value;
             }
+        }
+        
+        // Additional fields that might be needed by the block editor
+        $additional_fields = array(
+            'parent' => isset($term->parent) ? $term->parent : 0,
+            'meta' => array(),
+        );
+        
+        foreach ($additional_fields as $field => $value) {
+            if (!isset($data[$field])) {
+                $data[$field] = $value;
+            }
+        }
+        
+        // Ensure the id is always an integer
+        if (isset($data['id']) && !is_int($data['id'])) {
+            $data['id'] = (int) $data['id'];
         }
         
         $response->set_data($data);
