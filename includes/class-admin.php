@@ -83,7 +83,7 @@ class CPT_Tax_Syncer_Admin {
      * @param string $hook The current admin page
      */
     public function enqueue_admin_scripts($hook) {
-        if ($hook === 'tools_page_cpt-taxonomy-syncer' || $hook === 'settings_page_cpt-taxonomy-syncer-settings') {
+        if ($hook === 'tools_page_cpt-taxonomy-syncer' || $hook === 'settings_page_cpt-taxonomy-syncer-settings' || $hook === 'options-general_page_cpt-taxonomy-syncer-settings') {
             wp_enqueue_script(
                 'cpt-tax-syncer-admin',
                 CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/admin.js',

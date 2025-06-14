@@ -210,8 +210,21 @@ class CPT_Tax_Syncer_REST_Controller {
      * @return WP_REST_Response The response
      */
     public function sync_posts_to_terms($request) {
+        // Get CPT and taxonomy slugs from request or use the instance values
+        $cpt_slug = $request->get_param('cpt_slug') ?: $this->cpt_slug;
+        $taxonomy_slug = $request->get_param('taxonomy_slug') ?: $this->taxonomy_slug;
+        
+        // Validate that both slugs exist
+        if (!post_type_exists($cpt_slug) || !taxonomy_exists($taxonomy_slug)) {
+            return new WP_Error(
+                'invalid_slugs',
+                'Invalid post type or taxonomy slug.',
+                array('status' => 400)
+            );
+        }
+        
         $posts = get_posts(array(
-            'post_type' => $this->cpt_slug,
+            'post_type' => $cpt_slug,
             'post_status' => 'publish',
             'posts_per_page' => -1,
         ));
@@ -221,22 +234,22 @@ class CPT_Tax_Syncer_REST_Controller {
         
         foreach ($posts as $post) {
             // Check if a term with this name already exists
-            $term = get_term_by('name', $post->post_title, $this->taxonomy_slug);
+            $term = get_term_by('name', $post->post_title, $taxonomy_slug);
             
             if (!$term) {
                 // Create a new term
-                $result = wp_insert_term($post->post_title, $this->taxonomy_slug);
+                $result = wp_insert_term($post->post_title, $taxonomy_slug);
                 
                 if (!is_wp_error($result)) {
                     // Store post ID as term meta for future reference
-                    update_term_meta($result['term_id'], '_post_id_' . $this->cpt_slug, $post->ID);
+                    update_term_meta($result['term_id'], '_post_id_' . $cpt_slug, $post->ID);
                     $synced++;
                 } else {
                     $errors++;
                 }
             } else {
                 // Update the term meta
-                update_term_meta($term->term_id, '_post_id_' . $this->cpt_slug, $post->ID);
+                update_term_meta($term->term_id, '_post_id_' . $cpt_slug, $post->ID);
                 $synced++;
             }
         }
@@ -256,8 +269,21 @@ class CPT_Tax_Syncer_REST_Controller {
      * @return WP_REST_Response The response
      */
     public function sync_terms_to_posts($request) {
+        // Get CPT and taxonomy slugs from request or use the instance values
+        $cpt_slug = $request->get_param('cpt_slug') ?: $this->cpt_slug;
+        $taxonomy_slug = $request->get_param('taxonomy_slug') ?: $this->taxonomy_slug;
+        
+        // Validate that both slugs exist
+        if (!post_type_exists($cpt_slug) || !taxonomy_exists($taxonomy_slug)) {
+            return new WP_Error(
+                'invalid_slugs',
+                'Invalid post type or taxonomy slug.',
+                array('status' => 400)
+            );
+        }
+        
         $terms = get_terms(array(
-            'taxonomy' => $this->taxonomy_slug,
+            'taxonomy' => $taxonomy_slug,
             'hide_empty' => false,
         ));
         
@@ -267,7 +293,7 @@ class CPT_Tax_Syncer_REST_Controller {
         foreach ($terms as $term) {
             // Check if a post with this title already exists
             $existing_posts = get_posts(array(
-                'post_type' => $this->cpt_slug,
+                'post_type' => $cpt_slug,
                 'post_status' => 'publish',
                 'title' => $term->name,
                 'posts_per_page' => 1,
@@ -279,15 +305,15 @@ class CPT_Tax_Syncer_REST_Controller {
                     'post_title' => $term->name,
                     'post_content' => $term->description,
                     'post_status' => 'publish',
-                    'post_type' => $this->cpt_slug,
+                    'post_type' => $cpt_slug,
                 ));
                 
                 if (!is_wp_error($post_id)) {
                     // Store term ID as post meta for future reference
-                    update_post_meta($post_id, '_term_id_' . $this->taxonomy_slug, $term->term_id);
+                    update_post_meta($post_id, '_term_id_' . $taxonomy_slug, $term->term_id);
                     
                     // Store post ID as term meta for future reference
-                    update_term_meta($term->term_id, '_post_id_' . $this->cpt_slug, $post_id);
+                    update_term_meta($term->term_id, '_post_id_' . $cpt_slug, $post_id);
                     
                     $synced++;
                 } else {
@@ -295,10 +321,10 @@ class CPT_Tax_Syncer_REST_Controller {
                 }
             } else {
                 // Update the post meta
-                update_post_meta($existing_posts[0]->ID, '_term_id_' . $this->taxonomy_slug, $term->term_id);
+                update_post_meta($existing_posts[0]->ID, '_term_id_' . $taxonomy_slug, $term->term_id);
                 
                 // Update the term meta
-                update_term_meta($term->term_id, '_post_id_' . $this->cpt_slug, $existing_posts[0]->ID);
+                update_term_meta($term->term_id, '_post_id_' . $cpt_slug, $existing_posts[0]->ID);
                 
                 $synced++;
             }
