@@ -29,15 +29,6 @@ class CPT_Tax_Syncer_Admin {
      * Add admin menu
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'tools.php',
-            'CPT-Taxonomy Syncer',
-            'CPT-Tax Syncer',
-            'manage_options',
-            'cpt-taxonomy-syncer',
-            array($this, 'render_admin_page')
-        );
-        
         add_options_page(
             'CPT-Taxonomy Syncer Settings',
             'CPT-Tax Syncer',
@@ -110,57 +101,6 @@ class CPT_Tax_Syncer_Admin {
         }
     }
     
-    /**
-     * Render admin page
-     */
-    public function render_admin_page() {
-        $pairs = get_option('cpt_tax_syncer_pairs', array());
-        ?>
-        <div class="wrap">
-            <h1>CPT-Taxonomy Syncer</h1>
-            
-            <p>This tool allows you to manually sync custom post types with taxonomies.</p>
-            
-            <?php if (empty($pairs)) : ?>
-                <div class="notice notice-warning">
-                    <p>No CPT-Taxonomy pairs have been configured. Please go to <a href="<?php echo admin_url('options-general.php?page=cpt-taxonomy-syncer-settings'); ?>">Settings</a> to configure pairs.</p>
-                </div>
-            <?php else : ?>
-                <h2>Manual Sync</h2>
-                
-                <table class="widefat">
-                    <thead>
-                        <tr>
-                            <th>Custom Post Type</th>
-                            <th>Taxonomy</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($pairs as $pair) : ?>
-                            <tr>
-                                <td><?php echo esc_html($pair['cpt_slug']); ?></td>
-                                <td><?php echo esc_html($pair['taxonomy_slug']); ?></td>
-                                <td>
-                                    <button class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr($pair['cpt_slug']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy_slug']); ?>">
-                                        Sync Posts to Terms
-                                    </button>
-                                    <button class="button sync-terms-to-posts" data-cpt="<?php echo esc_attr($pair['cpt_slug']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy_slug']); ?>">
-                                        Sync Terms to Posts
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                
-                <div id="sync-result" class="notice notice-success" style="display: none; margin-top: 20px;">
-                    <p></p>
-                </div>
-            <?php endif; ?>
-        </div>
-        <?php
-    }
     
     /**
      * Render settings page
@@ -239,6 +179,41 @@ class CPT_Tax_Syncer_Admin {
                 
                 <?php submit_button(); ?>
             </form>
+            
+            <?php if (!empty($pairs)) : ?>
+                <h2>Manual Sync</h2>
+                <p>Use these buttons to manually sync your post types and taxonomies.</p>
+                
+                <table class="widefat" style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>Custom Post Type</th>
+                            <th>Taxonomy</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($pairs as $pair) : ?>
+                            <tr>
+                                <td><?php echo esc_html($pair['cpt_slug']); ?></td>
+                                <td><?php echo esc_html($pair['taxonomy_slug']); ?></td>
+                                <td>
+                                    <button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr($pair['cpt_slug']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy_slug']); ?>">
+                                        Sync Posts to Terms
+                                    </button>
+                                    <button type="button" class="button sync-terms-to-posts" data-cpt="<?php echo esc_attr($pair['cpt_slug']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy_slug']); ?>">
+                                        Sync Terms to Posts
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                
+                <div id="sync-result" class="notice" style="display: none; margin-top: 20px;">
+                    <p></p>
+                </div>
+            <?php endif; ?>
             
             <script type="text/template" id="pair-template">
                 <tr>

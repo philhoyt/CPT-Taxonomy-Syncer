@@ -186,6 +186,43 @@ class CPT_Taxonomy_Syncer_Settings {
                 
                 <?php submit_button(); ?>
             </form>
+            
+            <?php if (!empty($saved_pairs)) : ?>
+                <h2><?php _e('Manual Sync', 'cpt-taxonomy-syncer'); ?></h2>
+                <p><?php _e('Use these buttons to manually sync your post types and taxonomies.', 'cpt-taxonomy-syncer'); ?></p>
+                
+                <table class="widefat" style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th><?php _e('Custom Post Type', 'cpt-taxonomy-syncer'); ?></th>
+                            <th><?php _e('Taxonomy', 'cpt-taxonomy-syncer'); ?></th>
+                            <th><?php _e('Actions', 'cpt-taxonomy-syncer'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($saved_pairs as $pair) : ?>
+                            <?php if (isset($pair['enabled']) && $pair['enabled'] && !empty($pair['cpt']) && !empty($pair['taxonomy'])) : ?>
+                                <tr>
+                                    <td><?php echo esc_html($pair['cpt']); ?></td>
+                                    <td><?php echo esc_html($pair['taxonomy']); ?></td>
+                                    <td>
+                                        <button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr($pair['cpt']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy']); ?>">
+                                            <?php _e('Sync Posts to Terms', 'cpt-taxonomy-syncer'); ?>
+                                        </button>
+                                        <button type="button" class="button sync-terms-to-posts" data-cpt="<?php echo esc_attr($pair['cpt']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy']); ?>">
+                                            <?php _e('Sync Terms to Posts', 'cpt-taxonomy-syncer'); ?>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                
+                <div id="sync-result" class="notice" style="display: none; margin-top: 20px;">
+                    <p></p>
+                </div>
+            <?php endif; ?>
         </div>
         
         <script>
