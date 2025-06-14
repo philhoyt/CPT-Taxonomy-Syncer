@@ -2,9 +2,12 @@
 /**
  * Plugin Name: CPT-Taxonomy Syncer
  * Description: Automatically syncs a custom post type with a taxonomy
- * Version: 2.0.0
- * Author: Phil Hoyt
- * License: GPL-2.0+
+ * Plugin URI:        https://github.com/philhoyt/CPT-Taxonomy-Syncer
+ * Version: 0.0.2
+ * Author:            Phil Hoyt
+ * Author URI:        https://philhoyt.com
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  */
 
 // Exit if accessed directly
