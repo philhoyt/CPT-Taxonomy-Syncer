@@ -22,7 +22,6 @@ A WordPress plugin that automatically syncs a post type with a taxonomy.
 
 1. Upload the `CPT-Taxonomy-Syncer` folder to the `/wp-content/plugins/` directory
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. Modify the initialization code in the `CPT_Taxonomy_Syncer_Init` class to use your custom post type and taxonomy slugs
 
 ## Usage
 
