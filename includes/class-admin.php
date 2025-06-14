@@ -23,6 +23,9 @@ class CPT_Tax_Syncer_Admin {
         
         // Add admin scripts
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        
+        // Add settings link on plugins page
+        add_filter('plugin_action_links_' . plugin_basename(dirname(__DIR__) . '/index.php'), array($this, 'add_settings_link'));
     }
     
     /**
@@ -99,6 +102,18 @@ class CPT_Tax_Syncer_Admin {
                 )
             );
         }
+    }
+    
+    /**
+     * Add settings link to the plugins page
+     *
+     * @param array $links Plugin action links
+     * @return array Modified plugin action links
+     */
+    public function add_settings_link($links) {
+        $settings_link = '<a href="' . admin_url('options-general.php?page=cpt-taxonomy-syncer-settings') . '">' . __('Settings', 'cpt-taxonomy-syncer') . '</a>';
+        array_unshift($links, $settings_link);
+        return $links;
     }
     
     
