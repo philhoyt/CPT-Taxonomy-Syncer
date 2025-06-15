@@ -26,6 +26,13 @@ class CPT_Taxonomy_Syncer {
     private $taxonomy_slug;
     
     /**
+     * Whether to redirect taxonomy archive to CPT
+     * 
+     * @var bool
+     */
+    private $enable_redirect;
+    
+    /**
      * Static array of instances (for singleton pattern)
      * 
      * @var array
@@ -44,10 +51,12 @@ class CPT_Taxonomy_Syncer {
      * 
      * @param string $cpt_slug The custom post type slug
      * @param string $taxonomy_slug The taxonomy slug
+     * @param bool $enable_redirect Whether to redirect taxonomy archive to CPT
      */
-    private function __construct($cpt_slug, $taxonomy_slug) {
+    private function __construct($cpt_slug, $taxonomy_slug, $enable_redirect = false) {
         $this->cpt_slug = $cpt_slug;
         $this->taxonomy_slug = $taxonomy_slug;
+        $this->enable_redirect = $enable_redirect;
         
         // Initialize hooks
         $this->init_hooks();
@@ -58,13 +67,14 @@ class CPT_Taxonomy_Syncer {
      * 
      * @param string $cpt_slug The custom post type slug
      * @param string $taxonomy_slug The taxonomy slug
+     * @param bool $enable_redirect Whether to redirect taxonomy archive to CPT
      * @return CPT_Taxonomy_Syncer The instance
      */
-    public static function get_instance($cpt_slug, $taxonomy_slug) {
+    public static function get_instance($cpt_slug, $taxonomy_slug, $enable_redirect = false) {
         $key = $cpt_slug . '_' . $taxonomy_slug;
         
         if (!isset(self::$instances[$key])) {
-            self::$instances[$key] = new self($cpt_slug, $taxonomy_slug);
+            self::$instances[$key] = new self($cpt_slug, $taxonomy_slug, $enable_redirect);
         }
         
         return self::$instances[$key];
@@ -94,6 +104,11 @@ class CPT_Taxonomy_Syncer {
         
         // Hook into term deletion to sync to post
         add_action('pre_delete_term', array($this, 'sync_term_deletion_to_post'), 10, 2);
+        
+        // Add redirect for taxonomy archive if enabled
+        if ($this->enable_redirect) {
+            add_action('template_redirect', array($this, 'redirect_taxonomy_archive'));
+        }
     }
     
     /**
@@ -348,5 +363,29 @@ class CPT_Taxonomy_Syncer {
         
         // Reset the deletion flag
         self::$is_deleting = false;
+    }
+    
+    /**
+     * Redirect taxonomy archive to corresponding CPT post
+     * 
+     * This function redirects taxonomy archive pages to their corresponding CPT post
+     */
+    public function redirect_taxonomy_archive() {
+        // Check if we're on a taxonomy archive page for our taxonomy
+        if (is_tax($this->taxonomy_slug)) {
+            // Get the current term
+            $term = get_queried_object();
+            
+            if ($term && !is_wp_error($term)) {
+                // Get the associated post ID from term meta
+                $post_id = get_term_meta($term->term_id, '_post_id_' . $this->cpt_slug, true);
+                
+                if ($post_id) {
+                    // Redirect to the post
+                    wp_redirect(get_permalink($post_id), 301);
+                    exit;
+                }
+            }
+        }
     }
 }

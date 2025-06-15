@@ -70,6 +70,7 @@ class CPT_Tax_Syncer_Admin {
                 $sanitized_pairs[] = array(
                     'cpt_slug' => sanitize_text_field($pair['cpt_slug']),
                     'taxonomy_slug' => sanitize_text_field($pair['taxonomy_slug']),
+                    'enable_redirect' => isset($pair['enable_redirect']) ? (bool) $pair['enable_redirect'] : false,
                 );
             }
         }
@@ -144,7 +145,7 @@ class CPT_Tax_Syncer_Admin {
                     <thead>
                         <tr>
                             <th>Custom Post Type</th>
-                            <th>Taxonomy</th>
+                            <th>Taxonomy & Options</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -175,6 +176,11 @@ class CPT_Tax_Syncer_Admin {
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
+                                        <br>
+                                        <label>
+                                            <input type="checkbox" name="cpt_tax_syncer_pairs[<?php echo $index; ?>][enable_redirect]" value="1" <?php checked(isset($pair['enable_redirect']) ? $pair['enable_redirect'] : false); ?>>
+                                            Redirect taxonomy archive to CPT
+                                        </label>
                                     </td>
                                     <td>
                                         <button type="button" class="button remove-pair">Remove</button>
@@ -251,6 +257,11 @@ class CPT_Tax_Syncer_Admin {
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <br>
+                        <label>
+                            <input type="checkbox" name="cpt_tax_syncer_pairs[{{index}}][enable_redirect]" value="1">
+                            Redirect taxonomy archive to CPT
+                        </label>
                     </td>
                     <td>
                         <button type="button" class="button remove-pair">Remove</button>

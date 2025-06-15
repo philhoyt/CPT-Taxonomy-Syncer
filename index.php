@@ -36,9 +36,10 @@ function cpt_taxonomy_syncer_init() {
     foreach ($pairs as $pair) {
         $cpt_slug = $pair['cpt_slug'];
         $taxonomy_slug = $pair['taxonomy_slug'];
+        $enable_redirect = isset($pair['enable_redirect']) ? (bool) $pair['enable_redirect'] : false;
         
         // Initialize core syncing
-        CPT_Taxonomy_Syncer::get_instance($cpt_slug, $taxonomy_slug);
+        CPT_Taxonomy_Syncer::get_instance($cpt_slug, $taxonomy_slug, $enable_redirect);
         
         // Initialize REST API controller
         new CPT_Tax_Syncer_REST_Controller($cpt_slug, $taxonomy_slug);
