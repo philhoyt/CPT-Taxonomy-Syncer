@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CPT_TAXONOMY_SYNCER_VERSION', '2.0.0');
+define('CPT_TAXONOMY_SYNCER_VERSION', '0.0.2');
 define('CPT_TAXONOMY_SYNCER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -51,35 +51,3 @@ function cpt_taxonomy_syncer_init() {
 
 // Register the initialization hook
 add_action('init', 'cpt_taxonomy_syncer_init');
-
-/**
- * Enqueue scripts for block editor
- */
-function cpt_taxonomy_syncer_enqueue_scripts() {
-    // Only enqueue in admin
-    if (!is_admin()) {
-        return;
-    }
-    
-    // Get current screen
-    $screen = get_current_screen();
-    
-    // Only enqueue on post edit screens
-    if ($screen && $screen->base === 'post') {
-        // Get configured CPT/taxonomy pairs from options
-        $pairs = get_option('cpt_tax_syncer_pairs', array());
-        
-        // Find the pair for the current post type
-        $current_post_type = $screen->post_type;
-        $current_pair = null;
-        
-        foreach ($pairs as $pair) {
-            if ($pair['cpt_slug'] === $current_post_type) {
-                $current_pair = $pair;
-                break;
-            }
-        }
-    }
-}
-
-add_action('admin_enqueue_scripts', 'cpt_taxonomy_syncer_enqueue_scripts');
