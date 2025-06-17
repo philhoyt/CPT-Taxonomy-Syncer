@@ -70,6 +70,7 @@ class CPT_Tax_Syncer_Admin {
                 $sanitized_pairs[] = array(
                     'cpt_slug' => sanitize_text_field($pair['cpt_slug']),
                     'taxonomy_slug' => sanitize_text_field($pair['taxonomy_slug']),
+                    'enable_redirect' => isset($pair['enable_redirect']) ? (bool) $pair['enable_redirect'] : false,
                 );
             }
         }
@@ -145,6 +146,7 @@ class CPT_Tax_Syncer_Admin {
                         <tr>
                             <th>Custom Post Type</th>
                             <th>Taxonomy</th>
+                            <th>Redirect Archive</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -177,6 +179,9 @@ class CPT_Tax_Syncer_Admin {
                                         </select>
                                     </td>
                                     <td>
+                                        <input type="checkbox" name="cpt_tax_syncer_pairs[<?php echo $index; ?>][enable_redirect]" value="1" <?php checked(isset($pair['enable_redirect']) ? $pair['enable_redirect'] : false); ?>>
+                                    </td>
+                                    <td>
                                         <button type="button" class="button remove-pair">Remove</button>
                                     </td>
                                 </tr>
@@ -185,7 +190,7 @@ class CPT_Tax_Syncer_Admin {
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="3">
+                            <td colspan="4">
                                 <button type="button" class="button add-pair">Add Pair</button>
                             </td>
                         </tr>
@@ -204,6 +209,7 @@ class CPT_Tax_Syncer_Admin {
                         <tr>
                             <th>Custom Post Type</th>
                             <th>Taxonomy</th>
+                            <th>Redirect Archive</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -212,6 +218,7 @@ class CPT_Tax_Syncer_Admin {
                             <tr>
                                 <td><?php echo esc_html($pair['cpt_slug']); ?></td>
                                 <td><?php echo esc_html($pair['taxonomy_slug']); ?></td>
+                                <td><?php echo isset($pair['enable_redirect']) && $pair['enable_redirect'] ? 'Yes' : 'No'; ?></td>
                                 <td>
                                     <button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr($pair['cpt_slug']); ?>" data-taxonomy="<?php echo esc_attr($pair['taxonomy_slug']); ?>">
                                         Sync Posts to Terms
@@ -251,6 +258,9 @@ class CPT_Tax_Syncer_Admin {
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                    </td>
+                    <td>
+                        <input type="checkbox" name="cpt_tax_syncer_pairs[{{index}}][enable_redirect]" value="1">
                     </td>
                     <td>
                         <button type="button" class="button remove-pair">Remove</button>

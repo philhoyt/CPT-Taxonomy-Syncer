@@ -1,0 +1,43 @@
+{
+	"phpcs.enable": true,
+	"phpcs.executablePath": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcs",
+	"phpcs.standard": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/phpcs.xml",
+	"phpcs.showSources": true,
+	"phpcs.severity": 1,
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll": "explicit",
+		"source.fixAll.eslint": "explicit",
+		"source.fixAll.stylelint": "explicit"
+	},
+	"[php]": {
+		"editor.defaultFormatter": "junstyle.php-cs-fixer"
+	},
+	"php.validate.enable": false,
+	"php.suggest.basic": false,
+	"phpcs.lintOnOpen": true,
+	"phpcs.lintOnSave": true,
+	"files.exclude": {
+		"*/vendor/*": true,
+		"*/node_modules/*": true,
+		"*/build/*": true
+	},
+	"phpsab.executablePathCS": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcs",
+	"phpsab.executablePathCBF": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcbf",
+	"phpsab.standard": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/phpcs.xml",
+	"editor.defaultFormatter": null,
+	"eslint.validate": ["javascript", "javascriptreact"],
+	"stylelint.validate": ["css", "scss"],
+	"css.validate": false,
+	"scss.validate": false,
+	"javascript.validate.enable": false,
+	"[javascript]": {
+		"editor.defaultFormatter": "dbaeumer.vscode-eslint"
+	},
+	"[javascriptreact]": {
+		"editor.defaultFormatter": "dbaeumer.vscode-eslint"
+	},
+	"[scss]": {
+		"editor.defaultFormatter": "stylelint.vscode-stylelint"
+	}
+}
