@@ -2,20 +2,23 @@
 
 A WordPress plugin that automatically syncs a post type with a taxonomy.
 
-
 ### Creation Syncing
+
 - When a post is created in the CPT, a corresponding taxonomy term is created (if it doesn't exist)
 - When a taxonomy term is created, a corresponding post is created in the CPT (if it doesn't exist)
 
 ### Update Syncing
+
 - When a post title/content is updated, the corresponding taxonomy term is updated
 - When a taxonomy term name/description is updated, the corresponding post is updated
 
 ### Deletion Syncing
+
 - When a post is deleted, the corresponding taxonomy term is deleted
 - When a taxonomy term is deleted, the corresponding post is deleted
 
 ### Admin Interface
+
 - Includes an admin page under Settings → CPT-Tax Syncer with buttons to manually sync all posts and terms
 
 ## Installation
@@ -39,6 +42,7 @@ After installation, you can access the manual sync tools at:
 **Settings → CPT-Tax Syncer**
 
 This page provides two buttons:
+
 - **Sync Posts to Terms**: Creates taxonomy terms for any posts that don't have a corresponding term
 - **Sync Terms to Posts**: Creates posts for any taxonomy terms that don't have a corresponding post
 
@@ -47,6 +51,7 @@ This page provides two buttons:
 - Prevents duplicate syncing by checking if terms/posts already exist
 - Handles post/term creation, update, and deletion hooks automatically
 - Manual syncing
+- Redirects taxonomy archive pages to their corresponding CPT single post pages
 
 ## Requirements
 
