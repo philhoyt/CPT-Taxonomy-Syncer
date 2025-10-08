@@ -68,18 +68,11 @@
 
             const { query = {} } = attributes;
             const { 
-                useSyncedRelationship = false, 
-                relationshipDirection = 'posts_from_terms'
+                useSyncedRelationship = false
             } = query;
 
-            // Debug logging
-            console.log('All attributes:', attributes);
-            console.log('Query settings:', query);
-            console.log('useSyncedRelationship:', useSyncedRelationship);
 
             const updateSyncerSetting = (key, value) => {
-                console.log('Updating syncer setting:', key, '=', value);
-                
                 // Store settings directly in the query object for better persistence
                 const newQuery = {
                     ...query,
@@ -91,16 +84,11 @@
                     newQuery.inherit = false;
                 }
                 
-                console.log('New query object:', newQuery);
                 setAttributes({
                     query: newQuery
                 });
             };
 
-            // Get available post types from localized data
-            const defaultOptions = [{ label: __('Select Post Type', 'cpt-taxonomy-syncer'), value: '' }];
-            const serverPostTypes = window.cptTaxSyncerQuery?.postTypes || [];
-            const postTypeOptions = [...defaultOptions, ...serverPostTypes];
 
             return createElement(Fragment, null,
                 createElement(BlockEdit, props),
@@ -127,24 +115,9 @@
                             }
                         }),
                         
-                        useSyncedRelationship && createElement(Fragment, null,
-                            createElement(SelectControl, {
-                                label: __('Relationship Direction', 'cpt-taxonomy-syncer'),
-                                value: relationshipDirection,
-                                options: [
-                                    { 
-                                        label: __('Posts linked to current post\'s terms', 'cpt-taxonomy-syncer'), 
-                                        value: 'posts_from_terms' 
-                                    },
-                                    { 
-                                        label: __('Terms linked to current post', 'cpt-taxonomy-syncer'), 
-                                        value: 'terms_from_posts' 
-                                    }
-                                ],
-                                onChange: (value) => updateSyncerSetting('relationshipDirection', value),
-                                help: __('Choose how to find related content. Use the Post Type setting above to select which post type to query.', 'cpt-taxonomy-syncer')
-                            })
-                        )
+                        useSyncedRelationship && createElement('p', {
+                            style: { fontStyle: 'italic', color: '#666' }
+                        }, __('This will show posts from the selected Post Type that are assigned to the same taxonomy terms as the current post.', 'cpt-taxonomy-syncer'))
                     )
                 )
             );

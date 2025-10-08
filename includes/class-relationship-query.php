@@ -138,7 +138,6 @@ class CPT_Tax_Syncer_Relationship_Query {
 			if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
 				$syncer_settings = array(
 					'useSyncedRelationship' => $query_attrs['useSyncedRelationship'],
-					'relationshipDirection' => $query_attrs['relationshipDirection'] ?? 'posts_from_terms',
 					'targetPostType' => $query_attrs['targetPostType'] ?? $query_attrs['postType'] ?? '',
 				);
 			}
@@ -151,8 +150,6 @@ class CPT_Tax_Syncer_Relationship_Query {
 		// Store the settings globally so the query_loop_block_query_vars filter can access them
 		global $cpt_tax_syncer_current_block_settings;
 		$cpt_tax_syncer_current_block_settings = $syncer_settings;
-		
-		error_log( 'CPT-Tax Syncer: Found relationship settings: ' . print_r( $syncer_settings, true ) );
 
 		return $block_content;
 	}
@@ -209,27 +206,17 @@ class CPT_Tax_Syncer_Relationship_Query {
 			return $query_vars;
 		}
 
-		error_log( 'CPT-Tax Syncer: modify_query_vars - Found relationship settings: ' . print_r( $syncer_settings, true ) );
-
 		global $post;
 
 		// Make sure we have a current post
 		if ( ! $post || ! $post->ID ) {
-			error_log( 'CPT-Tax Syncer: No current post found' );
 			return $query_vars;
 		}
 
-		error_log( 'CPT-Tax Syncer: Current post ID: ' . $post->ID . ', Post type: ' . $post->post_type );
-
-		$relationship_direction = $syncer_settings['relationshipDirection'] ?? 'posts_from_terms';
 		$target_post_type = $syncer_settings['targetPostType'] ?? '';
-
-		error_log( 'CPT-Tax Syncer: Relationship direction: ' . $relationship_direction );
-		error_log( 'CPT-Tax Syncer: Target post type: ' . $target_post_type );
 
 		// Get configured pairs
 		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
-		error_log( 'CPT-Tax Syncer: Configured pairs: ' . print_r( $pairs, true ) );
 
 		// Find the relevant pair for the current post type
 		$current_pair = null;
@@ -241,18 +228,11 @@ class CPT_Tax_Syncer_Relationship_Query {
 		}
 
 		if ( ! $current_pair ) {
-			error_log( 'CPT-Tax Syncer: No matching pair found for post type: ' . $post->post_type );
 			return $query_vars;
 		}
 
-		error_log( 'CPT-Tax Syncer: Found matching pair: ' . print_r( $current_pair, true ) );
-
-		// Modify query based on relationship direction
-		if ( $relationship_direction === 'posts_from_terms' ) {
-			$query_vars = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post );
-		} elseif ( $relationship_direction === 'terms_from_posts' ) {
-			$query_vars = $this->get_terms_from_posts_query( $query_vars, $current_pair, $target_post_type, $post );
-		}
+		// Always use posts_from_terms relationship direction
+		$query_vars = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post );
 
 		return $query_vars;
 	}
@@ -271,12 +251,8 @@ class CPT_Tax_Syncer_Relationship_Query {
 		$meta_key = '_term_id_' . $pair['taxonomy_slug'];
 		$term_id = get_post_meta( $current_post->ID, $meta_key, true );
 
-		error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Looking for meta key: ' . $meta_key . ' on post ID: ' . $current_post->ID );
-		error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Found term ID: ' . $term_id );
-
 		if ( ! $term_id ) {
 			// No associated term, return empty query
-			error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - No term ID found, returning empty results' );
 			$query_vars['post__in'] = array( 0 ); // Force empty results
 			return $query_vars;
 		}
@@ -284,61 +260,9 @@ class CPT_Tax_Syncer_Relationship_Query {
 		// Set the target post type
 		if ( $target_post_type ) {
 			$query_vars['post_type'] = $target_post_type;
-			error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Set post_type to: ' . $target_post_type );
 		}
 
 		// Add taxonomy query to find posts assigned to the same term
-		$tax_query = array(
-			array(
-				'taxonomy' => $pair['taxonomy_slug'],
-				'field'    => 'term_id',
-				'terms'    => $term_id,
-			),
-		);
-		
-		$query_vars['tax_query'] = $tax_query;
-		error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Added tax_query: ' . print_r( $tax_query, true ) );
-		
-		// Debug: Check if any posts are assigned to this term
-		$debug_query = new WP_Query( array(
-			'post_type' => $target_post_type,
-			'tax_query' => $tax_query,
-			'posts_per_page' => -1,
-			'fields' => 'ids'
-		) );
-		error_log( 'CPT-Tax Syncer: Debug query found ' . $debug_query->found_posts . ' posts assigned to term ID: ' . $term_id . ' in taxonomy: ' . $pair['taxonomy_slug'] );
-
-		// Exclude the current post if it's the same post type
-		if ( $current_post->post_type === $target_post_type ) {
-			$query_vars['post__not_in'] = array( $current_post->ID );
-			error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Excluding current post ID: ' . $current_post->ID );
-		}
-
-		error_log( 'CPT-Tax Syncer: get_posts_from_terms_query - Final query_vars: ' . print_r( $query_vars, true ) );
-		return $query_vars;
-	}
-
-	/**
-	 * Get terms that are linked to the current post
-	 *
-	 * @param array   $query_vars The query variables.
-	 * @param array   $pair The CPT-taxonomy pair configuration.
-	 * @param string  $target_post_type The target post type to query.
-	 * @param WP_Post $current_post The current post.
-	 * @return array Modified query variables
-	 */
-	private function get_terms_from_posts_query( $query_vars, $pair, $target_post_type, $current_post ) {
-		// Get the term ID associated with the current post
-		$term_id = get_post_meta( $current_post->ID, '_term_id_' . $pair['taxonomy_slug'], true );
-
-		if ( ! $term_id ) {
-			// No associated term, return empty query
-			$query_vars['post__in'] = array( 0 ); // Force empty results
-			return $query_vars;
-		}
-
-		// For terms query, we need to find posts that have this term assigned
-		// This is useful when you want to show other posts in the same category
 		$query_vars['tax_query'] = array(
 			array(
 				'taxonomy' => $pair['taxonomy_slug'],
@@ -347,16 +271,14 @@ class CPT_Tax_Syncer_Relationship_Query {
 			),
 		);
 
-		// Set the target post type
-		if ( $target_post_type ) {
-			$query_vars['post_type'] = $target_post_type;
+		// Exclude the current post if it's the same post type
+		if ( $current_post->post_type === $target_post_type ) {
+			$query_vars['post__not_in'] = array( $current_post->ID );
 		}
-
-		// Exclude the current post
-		$query_vars['post__not_in'] = array( $current_post->ID );
 
 		return $query_vars;
 	}
+
 
 	/**
 	 * Get available post types for a given taxonomy
