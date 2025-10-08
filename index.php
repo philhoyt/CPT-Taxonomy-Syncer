@@ -3,7 +3,7 @@
  * Plugin Name: CPT-Taxonomy Syncer
  * Description: Automatically syncs a custom post type with a taxonomy
  * Plugin URI:        https://github.com/philhoyt/CPT-Taxonomy-Syncer
- * Version: 0.0.2
+ * Version: 1.0.0
  * Author:            Phil Hoyt
  * Author URI:        https://philhoyt.com
  * License:           GPL-2.0-or-later
