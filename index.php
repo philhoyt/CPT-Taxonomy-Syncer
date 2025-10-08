@@ -24,6 +24,7 @@ define( 'CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query.php';
 
 /**
  * Initialize the plugin
@@ -47,6 +48,9 @@ function cpt_taxonomy_syncer_init() {
 
 	// Initialize admin.
 	new CPT_Tax_Syncer_Admin();
+
+	// Initialize relationship query handler.
+	new CPT_Tax_Syncer_Relationship_Query();
 }
 
 // Register the initialization hook.
