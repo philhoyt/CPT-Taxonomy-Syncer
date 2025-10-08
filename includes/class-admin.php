@@ -39,11 +39,11 @@ class CPT_Tax_Syncer_Admin {
 	 * Add admin menu
 	 */
 	public function add_admin_menu() {
-		add_options_page(
-			'CPT-Taxonomy Syncer Settings',
+		add_management_page(
+			'CPT-Taxonomy Syncer',
 			'CPT-Tax Syncer',
 			'manage_options',
-			'cpt-taxonomy-syncer-settings',
+			'cpt-taxonomy-syncer',
 			array( $this, 'render_settings_page' )
 		);
 	}
@@ -95,7 +95,7 @@ class CPT_Tax_Syncer_Admin {
 	 * @param string $hook The current admin page.
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( $hook === 'tools_page_cpt-taxonomy-syncer' || $hook === 'settings_page_cpt-taxonomy-syncer-settings' || $hook === 'options-general_page_cpt-taxonomy-syncer-settings' ) {
+		if ( $hook === 'tools_page_cpt-taxonomy-syncer' ) {
 			wp_enqueue_script(
 				'cpt-tax-syncer-admin',
 				CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/admin.js',
@@ -123,7 +123,7 @@ class CPT_Tax_Syncer_Admin {
 	 * @return array Modified plugin action links
 	 */
 	public function add_settings_link( $links ) {
-		$settings_link = '<a href="' . admin_url( 'options-general.php?page=cpt-taxonomy-syncer-settings' ) . '">' . __( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
+		$settings_link = '<a href="' . admin_url( 'tools.php?page=cpt-taxonomy-syncer' ) . '">' . __( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
 	}

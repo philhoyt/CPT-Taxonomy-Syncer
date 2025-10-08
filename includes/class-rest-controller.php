@@ -259,45 +259,26 @@ class CPT_Tax_Syncer_REST_Controller {
 			);
 		}
 
-		$posts = get_posts(
-			array(
-				'post_type'      => $cpt_slug,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-			)
-		);
+		// Get the syncer instance for this CPT/taxonomy pair.
+		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $cpt_slug, $taxonomy_slug );
 
-		$synced = 0;
-		$errors = 0;
-
-		foreach ( $posts as $post ) {
-			// Check if a term with this name already exists.
-			$term = get_term_by( 'name', $post->post_title, $taxonomy_slug );
-
-			if ( ! $term ) {
-				// Create a new term.
-				$result = wp_insert_term( $post->post_title, $taxonomy_slug );
-
-				if ( ! is_wp_error( $result ) ) {
-					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], '_post_id_' . $cpt_slug, $post->ID );
-					++$synced;
-				} else {
-					++$errors;
-				}
-			} else {
-				// Update the term meta.
-				update_term_meta( $term->term_id, '_post_id_' . $cpt_slug, $post->ID );
-				++$synced;
-			}
+		if ( ! $syncer ) {
+			return new WP_Error(
+				'syncer_not_found',
+				'No syncer instance found for this CPT/taxonomy pair.',
+				array( 'status' => 404 )
+			);
 		}
+
+		// Use the core syncing method.
+		$result = $syncer->bulk_sync_posts_to_terms();
 
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => sprintf( 'Synced %d posts to terms with %d errors.', $synced, $errors ),
-				'synced'  => $synced,
-				'errors'  => $errors,
+				'message' => sprintf( 'Synced %d posts to terms with %d errors.', $result['synced'], $result['errors'] ),
+				'synced'  => $result['synced'],
+				'errors'  => $result['errors'],
 			),
 			200
 		);
@@ -323,66 +304,26 @@ class CPT_Tax_Syncer_REST_Controller {
 			);
 		}
 
-		$terms = get_terms(
-			array(
-				'taxonomy'   => $taxonomy_slug,
-				'hide_empty' => false,
-			)
-		);
+		// Get the syncer instance for this CPT/taxonomy pair.
+		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $cpt_slug, $taxonomy_slug );
 
-		$synced = 0;
-		$errors = 0;
-
-		foreach ( $terms as $term ) {
-			// Check if a post with this title already exists.
-			$existing_posts = get_posts(
-				array(
-					'post_type'      => $cpt_slug,
-					'post_status'    => 'publish',
-					'title'          => $term->name,
-					'posts_per_page' => 1,
-				)
+		if ( ! $syncer ) {
+			return new WP_Error(
+				'syncer_not_found',
+				'No syncer instance found for this CPT/taxonomy pair.',
+				array( 'status' => 404 )
 			);
-
-			if ( empty( $existing_posts ) ) {
-				// Create a new post.
-				$post_id = wp_insert_post(
-					array(
-						'post_title'   => $term->name,
-						'post_content' => $term->description,
-						'post_status'  => 'publish',
-						'post_type'    => $cpt_slug,
-					)
-				);
-
-				if ( ! is_wp_error( $post_id ) ) {
-					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, '_term_id_' . $taxonomy_slug, $term->term_id );
-
-					// Store post ID as term meta for future reference.
-					update_term_meta( $term->term_id, '_post_id_' . $cpt_slug, $post_id );
-
-					++$synced;
-				} else {
-					++$errors;
-				}
-			} else {
-				// Update the post meta.
-				update_post_meta( $existing_posts[0]->ID, '_term_id_' . $taxonomy_slug, $term->term_id );
-
-				// Update the term meta.
-				update_term_meta( $term->term_id, '_post_id_' . $cpt_slug, $existing_posts[0]->ID );
-
-				++$synced;
-			}
 		}
+
+		// Use the core syncing method.
+		$result = $syncer->bulk_sync_terms_to_posts();
 
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => sprintf( 'Synced %d terms to posts with %d errors.', $synced, $errors ),
-				'synced'  => $synced,
-				'errors'  => $errors,
+				'message' => sprintf( 'Synced %d terms to posts with %d errors.', $result['synced'], $result['errors'] ),
+				'synced'  => $result['synced'],
+				'errors'  => $result['errors'],
 			),
 			200
 		);

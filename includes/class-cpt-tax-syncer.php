@@ -408,4 +408,124 @@ class CPT_Taxonomy_Syncer {
 			}
 		}
 	}
+
+	/**
+	 * Bulk sync all posts to terms
+	 *
+	 * @return array Results array with synced count and errors
+	 */
+	public function bulk_sync_posts_to_terms() {
+		$posts = get_posts(
+			array(
+				'post_type'      => $this->cpt_slug,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+			)
+		);
+
+		$synced = 0;
+		$errors = 0;
+
+		foreach ( $posts as $post ) {
+			// Check if a term with this name already exists.
+			$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
+
+			if ( ! $term ) {
+				// Create a new term.
+				$result = wp_insert_term( $post->post_title, $this->taxonomy_slug );
+
+				if ( ! is_wp_error( $result ) ) {
+					// Store post ID as term meta for future reference.
+					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post->ID );
+					++$synced;
+				} else {
+					++$errors;
+				}
+			} else {
+				// Update the term meta to ensure linkage.
+				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post->ID );
+				++$synced;
+			}
+		}
+
+		return array(
+			'synced' => $synced,
+			'errors' => $errors,
+		);
+	}
+
+	/**
+	 * Bulk sync all terms to posts
+	 *
+	 * @return array Results array with synced count and errors
+	 */
+	public function bulk_sync_terms_to_posts() {
+		$terms = get_terms(
+			array(
+				'taxonomy'   => $this->taxonomy_slug,
+				'hide_empty' => false,
+			)
+		);
+
+		$synced = 0;
+		$errors = 0;
+
+		foreach ( $terms as $term ) {
+			// Check if a post with this title already exists.
+			$existing_posts = get_posts(
+				array(
+					'post_type'      => $this->cpt_slug,
+					'post_status'    => 'publish',
+					'title'          => $term->name,
+					'posts_per_page' => 1,
+				)
+			);
+
+			if ( empty( $existing_posts ) ) {
+				// Create a new post.
+				$post_id = wp_insert_post(
+					array(
+						'post_title'   => $term->name,
+						'post_content' => $term->description,
+						'post_status'  => 'publish',
+						'post_type'    => $this->cpt_slug,
+					)
+				);
+
+				if ( ! is_wp_error( $post_id ) ) {
+					// Store term ID as post meta for future reference.
+					update_post_meta( $post_id, '_term_id_' . $this->taxonomy_slug, $term->term_id );
+
+					// Store post ID as term meta for future reference.
+					update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post_id );
+
+					++$synced;
+				} else {
+					++$errors;
+				}
+			} else {
+				// Update the meta to ensure linkage.
+				update_post_meta( $existing_posts[0]->ID, '_term_id_' . $this->taxonomy_slug, $term->term_id );
+				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $existing_posts[0]->ID );
+				++$synced;
+			}
+		}
+
+		return array(
+			'synced' => $synced,
+			'errors' => $errors,
+		);
+	}
+
+	/**
+	 * Get a syncer instance by CPT and taxonomy slugs
+	 *
+	 * @param string $cpt_slug The custom post type slug.
+	 * @param string $taxonomy_slug The taxonomy slug.
+	 * @return CPT_Taxonomy_Syncer|null The syncer instance or null if not found
+	 */
+	public static function get_syncer_instance( $cpt_slug, $taxonomy_slug ) {
+		$key = $cpt_slug . '_' . $taxonomy_slug;
+		return isset( self::$instances[ $key ] ) ? self::$instances[ $key ] : null;
+	}
 }
