@@ -189,21 +189,28 @@ class CPT_Tax_Syncer_REST_Controller {
 		$content = $request->get_param( 'content' ) ?: '';
 
 		// Check if a post with this title already exists.
-		$existing_posts = get_posts(
-			array(
-				'post_type'      => $this->cpt_slug,
-				'post_status'    => 'publish',
-				'title'          => $title,
-				'posts_per_page' => 1,
+		// Use direct SQL query since WP_Query doesn't support title parameter.
+		global $wpdb;
+
+		$post_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} 
+				WHERE post_title = %s 
+				AND post_type = %s 
+				AND post_status = 'publish' 
+				LIMIT 1",
+				$title,
+				$this->cpt_slug
 			)
 		);
 
-		if ( ! empty( $existing_posts ) ) {
+		if ( $post_id ) {
+			$existing_post = get_post( $post_id );
 			return new WP_REST_Response(
 				array(
 					'success' => false,
 					'message' => 'A post with this title already exists.',
-					'post'    => $this->prepare_post_data( $existing_posts[0] ),
+					'post'    => $this->prepare_post_data( $existing_post ),
 				),
 				200
 			);
