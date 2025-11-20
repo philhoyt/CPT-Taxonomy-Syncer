@@ -575,19 +575,49 @@ class CPT_Taxonomy_Syncer {
 	}
 
 	/**
-	 * Bulk sync all posts to terms
+	 * Get total count of posts to sync
 	 *
-	 * @return array Results array with synced count and errors
+	 * @return int Total post count
 	 */
-	public function bulk_sync_posts_to_terms() {
-		// Get all posts at once (1 query).
-		$posts = get_posts(
+	public function get_posts_count() {
+		$count = wp_count_posts( $this->cpt_slug );
+		return isset( $count->{CPT_TAX_SYNCER_DEFAULT_POST_STATUS} ) ? (int) $count->{CPT_TAX_SYNCER_DEFAULT_POST_STATUS} : 0;
+	}
+
+	/**
+	 * Get total count of terms to sync
+	 *
+	 * @return int Total term count
+	 */
+	public function get_terms_count() {
+		$terms = get_terms(
 			array(
-				'post_type'      => $this->cpt_slug,
-				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-				'posts_per_page' => -1,
+				'taxonomy'   => $this->taxonomy_slug,
+				'hide_empty' => false,
+				'fields'     => 'count',
 			)
 		);
+		return is_wp_error( $terms ) ? 0 : (int) $terms;
+	}
+
+	/**
+	 * Bulk sync all posts to terms
+	 *
+	 * @param int $offset Offset for pagination (default: 0).
+	 * @param int $limit  Limit for pagination (default: -1 for all).
+	 * @return array Results array with synced count and errors
+	 */
+	public function bulk_sync_posts_to_terms( $offset = 0, $limit = -1 ) {
+		// Get posts with pagination support.
+		$args = array(
+			'post_type'      => $this->cpt_slug,
+			'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
+			'posts_per_page' => $limit > 0 ? $limit : -1,
+			'offset'         => $offset,
+			'no_found_rows'  => true, // Performance optimization.
+		);
+
+		$posts = get_posts( $args );
 
 		if ( empty( $posts ) ) {
 			return array(
@@ -673,16 +703,20 @@ class CPT_Taxonomy_Syncer {
 	/**
 	 * Bulk sync all terms to posts
 	 *
+	 * @param int $offset Offset for pagination (default: 0).
+	 * @param int $limit  Limit for pagination (default: -1 for all).
 	 * @return array Results array with synced count and errors
 	 */
-	public function bulk_sync_terms_to_posts() {
-		// Get all terms at once (1 query).
-		$terms = get_terms(
-			array(
-				'taxonomy'   => $this->taxonomy_slug,
-				'hide_empty' => false,
-			)
+	public function bulk_sync_terms_to_posts( $offset = 0, $limit = -1 ) {
+		// Get terms with pagination support.
+		$args = array(
+			'taxonomy'   => $this->taxonomy_slug,
+			'hide_empty' => false,
+			'offset'     => $offset,
+			'number'     => $limit > 0 ? $limit : 0, // 0 means get all.
 		);
+
+		$terms = get_terms( $args );
 
 		if ( is_wp_error( $terms ) || empty( $terms ) ) {
 			return array(

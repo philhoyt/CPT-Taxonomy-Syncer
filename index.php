@@ -34,11 +34,19 @@ define( 'CPT_TAX_SYNCER_OPTION_NAME', 'cpt_tax_syncer_pairs' );
 // Define default post status for synced posts.
 define( 'CPT_TAX_SYNCER_DEFAULT_POST_STATUS', 'publish' );
 
+// Define batch size for bulk operations.
+define( 'CPT_TAX_SYNCER_BATCH_SIZE', 100 );
+
 // Include required files.
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query.php';
+
+// Include WP-CLI commands if WP-CLI is available.
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-wp-cli.php';
+}
 
 /**
  * Initialize the plugin

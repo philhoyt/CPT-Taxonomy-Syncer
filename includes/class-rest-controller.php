@@ -115,6 +115,47 @@ class CPT_Tax_Syncer_REST_Controller {
 				'permission_callback' => array( $this, 'check_permission' ),
 			)
 		);
+
+		// Register batch processing endpoints.
+		register_rest_route(
+			$this->namespace,
+			'/batch-sync/init',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'init_batch_sync' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			)
+		);
+
+		register_rest_route(
+			$this->namespace,
+			'/batch-sync/process',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'process_batch' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			)
+		);
+
+		register_rest_route(
+			$this->namespace,
+			'/batch-sync/progress',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'get_batch_progress' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			)
+		);
+
+		register_rest_route(
+			$this->namespace,
+			'/batch-sync/cleanup',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'cleanup_batch' ),
+				'permission_callback' => array( $this, 'check_permission' ),
+			)
+		);
 	}
 
 	/**
@@ -332,6 +373,179 @@ class CPT_Tax_Syncer_REST_Controller {
 				'message' => sprintf( 'Synced %d terms to posts with %d errors.', $result['synced'], $result['errors'] ),
 				'synced'  => $result['synced'],
 				'errors'  => $result['errors'],
+			),
+			200
+		);
+	}
+
+	/**
+	 * Initialize batch sync operation
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public function init_batch_sync( $request ) {
+		$cpt_slug      = $request->get_param( 'cpt_slug' ) ?: $this->cpt_slug;
+		$taxonomy_slug = $request->get_param( 'taxonomy_slug' ) ?: $this->taxonomy_slug;
+		$operation     = $request->get_param( 'operation' ); // 'posts-to-terms' or 'terms-to-posts'.
+
+		if ( ! $operation || ! in_array( $operation, array( 'posts-to-terms', 'terms-to-posts' ), true ) ) {
+			return new WP_Error( 'invalid_operation', 'Invalid operation. Must be "posts-to-terms" or "terms-to-posts".', array( 'status' => 400 ) );
+		}
+
+		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $cpt_slug, $taxonomy_slug );
+
+		if ( ! $syncer ) {
+			return new WP_Error( 'syncer_not_found', 'No syncer instance found for this CPT/taxonomy pair.', array( 'status' => 404 ) );
+		}
+
+		// Get total count.
+		$total = 'posts-to-terms' === $operation ? $syncer->get_posts_count() : $syncer->get_terms_count();
+
+		// Create batch ID.
+		$batch_id = 'cpt_tax_sync_' . $cpt_slug . '_' . $taxonomy_slug . '_' . $operation . '_' . time();
+
+		// Store batch info in transient (expires in 1 hour).
+		$batch_data = array(
+			'cpt_slug'      => $cpt_slug,
+			'taxonomy_slug' => $taxonomy_slug,
+			'operation'     => $operation,
+			'total'         => $total,
+			'processed'     => 0,
+			'synced'        => 0,
+			'errors'        => 0,
+			'batch_size'    => apply_filters( 'cpt_tax_syncer_batch_size', CPT_TAX_SYNCER_BATCH_SIZE, $operation ),
+		);
+
+		set_transient( $batch_id, $batch_data, HOUR_IN_SECONDS );
+
+		return new WP_REST_Response(
+			array(
+				'success'  => true,
+				'batch_id' => $batch_id,
+				'total'    => $total,
+				'message'  => sprintf( 'Batch sync initialized. Total items: %d', $total ),
+			),
+			200
+		);
+	}
+
+	/**
+	 * Process a batch
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public function process_batch( $request ) {
+		$batch_id = $request->get_param( 'batch_id' );
+
+		if ( ! $batch_id ) {
+			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+		}
+
+		$batch_data = get_transient( $batch_id );
+
+		if ( false === $batch_data ) {
+			return new WP_Error( 'batch_not_found', 'Batch not found or expired.', array( 'status' => 404 ) );
+		}
+
+		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $batch_data['cpt_slug'], $batch_data['taxonomy_slug'] );
+
+		if ( ! $syncer ) {
+			return new WP_Error( 'syncer_not_found', 'No syncer instance found.', array( 'status' => 404 ) );
+		}
+
+		// Process one batch.
+		$offset = $batch_data['processed'];
+		$limit  = $batch_data['batch_size'];
+
+		if ( 'posts-to-terms' === $batch_data['operation'] ) {
+			$result = $syncer->bulk_sync_posts_to_terms( $offset, $limit );
+		} else {
+			$result = $syncer->bulk_sync_terms_to_posts( $offset, $limit );
+		}
+
+		// Update batch data.
+		$batch_data['processed'] += $result['synced'] + $result['errors'];
+		$batch_data['synced']    += $result['synced'];
+		$batch_data['errors']    += $result['errors'];
+
+		$is_complete = $batch_data['processed'] >= $batch_data['total'];
+
+		// Save updated batch data.
+		set_transient( $batch_id, $batch_data, HOUR_IN_SECONDS );
+
+		return new WP_REST_Response(
+			array(
+				'success'    => true,
+				'complete'   => $is_complete,
+				'processed'  => $batch_data['processed'],
+				'total'      => $batch_data['total'],
+				'synced'     => $batch_data['synced'],
+				'errors'     => $batch_data['errors'],
+				'percentage' => $batch_data['total'] > 0 ? round( ( $batch_data['processed'] / $batch_data['total'] ) * 100, 2 ) : 0,
+				'message'    => $is_complete
+					? sprintf( 'Batch sync complete! Synced %d items with %d errors.', $batch_data['synced'], $batch_data['errors'] )
+					: sprintf( 'Processed %d of %d items...', $batch_data['processed'], $batch_data['total'] ),
+			),
+			200
+		);
+	}
+
+	/**
+	 * Get batch progress
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public function get_batch_progress( $request ) {
+		$batch_id = $request->get_param( 'batch_id' );
+
+		if ( ! $batch_id ) {
+			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+		}
+
+		$batch_data = get_transient( $batch_id );
+
+		if ( false === $batch_data ) {
+			return new WP_Error( 'batch_not_found', 'Batch not found or expired.', array( 'status' => 404 ) );
+		}
+
+		$is_complete = $batch_data['processed'] >= $batch_data['total'];
+
+		return new WP_REST_Response(
+			array(
+				'success'    => true,
+				'complete'   => $is_complete,
+				'processed'  => $batch_data['processed'],
+				'total'      => $batch_data['total'],
+				'synced'     => $batch_data['synced'],
+				'errors'     => $batch_data['errors'],
+				'percentage' => $batch_data['total'] > 0 ? round( ( $batch_data['processed'] / $batch_data['total'] ) * 100, 2 ) : 0,
+			),
+			200
+		);
+	}
+
+	/**
+	 * Cleanup batch data
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public function cleanup_batch( $request ) {
+		$batch_id = $request->get_param( 'batch_id' );
+
+		if ( ! $batch_id ) {
+			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+		}
+
+		delete_transient( $batch_id );
+
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'message' => 'Batch data cleaned up.',
 			),
 			200
 		);
