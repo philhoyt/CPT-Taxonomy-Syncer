@@ -10,7 +10,9 @@
 		"lint": "phpcs",
 		"lint-fix": "phpcbf",
 		"lint-all": "phpcs --standard=WordPress --extensions=php --ignore=*/vendor/*,*/node_modules/*,*/build/* .",
-		"lint-fix-all": "phpcbf --standard=WordPress --extensions=php --ignore=*/vendor/*,*/node_modules/*,*/build/* ."
+		"lint-fix-all": "phpcbf --standard=WordPress --extensions=php --ignore=*/vendor/*,*/node_modules/*,*/build/* .",
+		"package": "php bin/package-plugin.php",
+		"packages-zip": "php bin/package-plugin.php"
 	},
 	"config": {
 		"allow-plugins": {
