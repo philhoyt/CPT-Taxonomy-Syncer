@@ -55,6 +55,13 @@ class CPT_Taxonomy_Syncer {
 	private static $is_deleting = false;
 
 	/**
+	 * Flag to prevent infinite recursion during updates
+	 *
+	 * @var bool
+	 */
+	private static $is_updating = false;
+
+	/**
 	 * Constructor
 	 *
 	 * @param string $cpt_slug The custom post type slug.
@@ -232,6 +239,11 @@ class CPT_Taxonomy_Syncer {
 	 * @param WP_Post $post_before The post object before the update.
 	 */
 	public function sync_post_update_to_term( $post_id, $post_after, $post_before ) {
+		// Prevent infinite recursion.
+		if ( self::$is_updating ) {
+			return;
+		}
+
 		// Only process our CPT.
 		if ( get_post_type( $post_id ) !== $this->cpt_slug ) {
 			return;
@@ -244,6 +256,9 @@ class CPT_Taxonomy_Syncer {
 
 		// Check if the title has changed.
 		if ( $post_after->post_title !== $post_before->post_title ) {
+			// Set the update flag to prevent recursion.
+			self::$is_updating = true;
+
 			// Find the corresponding term by the old title.
 			$term = get_term_by( 'name', $post_before->post_title, $this->taxonomy_slug );
 
@@ -266,6 +281,9 @@ class CPT_Taxonomy_Syncer {
 					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
 				}
 			}
+
+			// Reset the update flag.
+			self::$is_updating = false;
 		}
 	}
 
@@ -276,6 +294,11 @@ class CPT_Taxonomy_Syncer {
 	 * @param int $tt_id The term taxonomy ID.
 	 */
 	public function sync_term_update_to_post( $term_id, $tt_id ) {
+		// Prevent infinite recursion.
+		if ( self::$is_updating ) {
+			return;
+		}
+
 		// Get the term.
 		$term = get_term( $term_id, $this->taxonomy_slug );
 
@@ -286,15 +309,24 @@ class CPT_Taxonomy_Syncer {
 		// Get the associated post ID from term meta.
 		$post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
 
+		// Set the update flag to prevent recursion.
+		self::$is_updating = true;
+
 		if ( $post_id ) {
 			// Update the post.
-			wp_update_post(
+			$result = wp_update_post(
 				array(
 					'ID'           => $post_id,
 					'post_title'   => $term->name,
 					'post_content' => $term->description,
 				)
 			);
+
+			// Check for errors (though wp_update_post returns post ID or WP_Error).
+			if ( is_wp_error( $result ) ) {
+				// Log error if needed, but continue to reset flag.
+				error_log( 'CPT-Tax Syncer: Failed to update post ' . $post_id . ': ' . $result->get_error_message() );
+			}
 		} else {
 			// No associated post, create one.
 			$post_id = wp_insert_post(
@@ -314,6 +346,9 @@ class CPT_Taxonomy_Syncer {
 				update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $post_id );
 			}
 		}
+
+		// Reset the update flag.
+		self::$is_updating = false;
 	}
 
 	/**
