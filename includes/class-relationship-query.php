@@ -3,6 +3,8 @@
  * Relationship Query Handler for CPT-Taxonomy Syncer
  *
  * Handles dynamic query modifications for synced relationships in Query Loop blocks
+ *
+ * @package CPT_Taxonomy_Syncer
  */
 
 // Exit if accessed directly.
@@ -76,7 +78,9 @@ class CPT_Tax_Syncer_Relationship_Query {
 		// Check if file exists before enqueuing.
 		$script_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'assets/js/relationship-query-variation.js';
 		if ( ! file_exists( $script_path ) ) {
-			error_log( 'CPT-Tax Syncer: JavaScript file not found at ' . $script_path );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'CPT-Tax Syncer: JavaScript file not found at ' . $script_path );
+			}
 			return;
 		}
 

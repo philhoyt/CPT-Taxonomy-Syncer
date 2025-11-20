@@ -3,9 +3,11 @@
  * Core CPT-Taxonomy Syncer class
  *
  * Handles the core syncing logic between custom post types and taxonomies
+ *
+ * @package CPT_Taxonomy_Syncer
  */
 
-// Exit if accessed directly
+// Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -218,7 +220,7 @@ class CPT_Taxonomy_Syncer {
 	 *
 	 * @param int     $post_id The post ID.
 	 * @param WP_Post $post The post object.
-	 * @param bool    $update Whether this is an update.
+	 * @param bool    $update Whether this is an update (unused but required by hook signature).
 	 */
 	public function sync_post_to_term( $post_id, $post, $update ) {
 		// Skip auto-drafts and revisions.
@@ -612,7 +614,7 @@ class CPT_Taxonomy_Syncer {
 
 				if ( $post_id ) {
 					// Redirect to the post.
-					wp_redirect( get_permalink( $post_id ), 301 );
+					wp_safe_redirect( get_permalink( $post_id ), 301 );
 					exit;
 				}
 			}

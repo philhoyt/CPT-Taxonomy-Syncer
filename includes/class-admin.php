@@ -240,7 +240,7 @@ class CPT_Tax_Syncer_Admin {
 							<tr>
 								<td><?php echo esc_html( $pair['cpt_slug'] ); ?></td>
 								<td><?php echo esc_html( $pair['taxonomy_slug'] ); ?></td>
-								<td><?php echo isset( $pair['enable_redirect'] ) && $pair['enable_redirect'] ? 'Yes' : 'No'; ?></td>
+								<td><?php echo isset( $pair['enable_redirect'] ) && $pair['enable_redirect'] ? esc_html__( 'Yes', 'cpt-taxonomy-syncer' ) : esc_html__( 'No', 'cpt-taxonomy-syncer' ); ?></td>
 								<td>
 									<button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr( $pair['cpt_slug'] ); ?>" data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>">
 										Sync Posts to Terms

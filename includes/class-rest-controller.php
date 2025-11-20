@@ -3,6 +3,8 @@
  * REST API Controller for CPT-Taxonomy Syncer
  *
  * Handles custom REST API endpoints for syncing operations
+ *
+ * @package CPT_Taxonomy_Syncer
  */
 
 // Exit if accessed directly.
@@ -10,6 +12,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/**
+ * REST API Controller class
+ *
+ * @package CPT_Taxonomy_Syncer
+ */
 class CPT_Tax_Syncer_REST_Controller {
 	/**
 	 * REST API namespace
@@ -94,36 +101,36 @@ class CPT_Tax_Syncer_REST_Controller {
 			)
 		);
 
-		// Register endpoint for manual sync from posts to terms.
+		// Register endpoint for manual sync from posts to terms (bulk operation).
 		register_rest_route(
 			$this->namespace,
 			'/sync-posts-to-terms',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'sync_posts_to_terms' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 
-		// Register endpoint for manual sync from terms to posts.
+		// Register endpoint for manual sync from terms to posts (bulk operation).
 		register_rest_route(
 			$this->namespace,
 			'/sync-terms-to-posts',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'sync_terms_to_posts' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 
-		// Register batch processing endpoints.
+		// Register batch processing endpoints (all require manage_options).
 		register_rest_route(
 			$this->namespace,
 			'/batch-sync/init',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'init_batch_sync' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 
@@ -133,7 +140,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'process_batch' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 
@@ -143,7 +150,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( $this, 'get_batch_progress' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 
@@ -153,7 +160,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'cleanup_batch' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
 	}
@@ -161,10 +168,26 @@ class CPT_Tax_Syncer_REST_Controller {
 	/**
 	 * Check if the current user has permission to use the endpoints
 	 *
+	 * Individual create operations use edit_posts to match admin menu capability.
+	 *
 	 * @return bool Whether the user has permission
 	 */
 	public function check_permission() {
+		// Individual create operations use edit_posts (matches admin menu).
 		return current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * Check if the current user has permission for bulk operations
+	 *
+	 * Bulk sync operations require manage_options capability for security,
+	 * as they can affect many posts/terms at once.
+	 *
+	 * @return bool Whether the user has permission
+	 */
+	public function check_bulk_permission() {
+		// Bulk operations require manage_options (admin-level access).
+		return current_user_can( 'manage_options' );
 	}
 
 	/**
@@ -175,7 +198,10 @@ class CPT_Tax_Syncer_REST_Controller {
 	 */
 	public function create_term( $request ) {
 		$name        = $request->get_param( 'name' );
-		$description = $request->get_param( 'description' ) ?: '';
+		$description = $request->get_param( 'description' );
+		if ( empty( $description ) ) {
+			$description = '';
+		}
 
 		// Check if a term with this name already exists.
 		$existing_term = get_term_by( 'name', $name, $this->taxonomy_slug );
@@ -183,7 +209,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			return new WP_REST_Response(
 				array(
 					'success' => false,
-					'message' => 'A term with this name already exists.',
+					'message' => __( 'A term with this name already exists.', 'cpt-taxonomy-syncer' ),
 					'term'    => $this->prepare_term_data( $existing_term ),
 				),
 				200
@@ -212,7 +238,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => 'Term created and synced successfully.',
+				'message' => __( 'Term created and synced successfully.', 'cpt-taxonomy-syncer' ),
 				'term'    => $this->prepare_term_data( $term ),
 			),
 			201
@@ -227,7 +253,10 @@ class CPT_Tax_Syncer_REST_Controller {
 	 */
 	public function create_post( $request ) {
 		$title   = $request->get_param( 'title' );
-		$content = $request->get_param( 'content' ) ?: '';
+		$content = $request->get_param( 'content' );
+		if ( empty( $content ) ) {
+			$content = '';
+		}
 
 		// Check if a post with this title already exists.
 		// Use direct SQL query since WP_Query doesn't support title parameter.
@@ -251,7 +280,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			return new WP_REST_Response(
 				array(
 					'success' => false,
-					'message' => 'A post with this title already exists.',
+					'message' => __( 'A post with this title already exists.', 'cpt-taxonomy-syncer' ),
 					'post'    => $this->prepare_post_data( $existing_post ),
 				),
 				200
@@ -281,7 +310,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => 'Post created and synced successfully.',
+				'message' => __( 'Post created and synced successfully.', 'cpt-taxonomy-syncer' ),
 				'post'    => $this->prepare_post_data( $post ),
 			),
 			201
@@ -296,14 +325,20 @@ class CPT_Tax_Syncer_REST_Controller {
 	 */
 	public function sync_posts_to_terms( $request ) {
 		// Get CPT and taxonomy slugs from request or use the instance values.
-		$cpt_slug      = $request->get_param( 'cpt_slug' ) ?: $this->cpt_slug;
-		$taxonomy_slug = $request->get_param( 'taxonomy_slug' ) ?: $this->taxonomy_slug;
+		$cpt_slug = $request->get_param( 'cpt_slug' );
+		if ( empty( $cpt_slug ) ) {
+			$cpt_slug = $this->cpt_slug;
+		}
+		$taxonomy_slug = $request->get_param( 'taxonomy_slug' );
+		if ( empty( $taxonomy_slug ) ) {
+			$taxonomy_slug = $this->taxonomy_slug;
+		}
 
 		// Validate that both slugs exist.
 		if ( ! post_type_exists( $cpt_slug ) || ! taxonomy_exists( $taxonomy_slug ) ) {
 			return new WP_Error(
 				'invalid_slugs',
-				'Invalid post type or taxonomy slug.',
+				__( 'Invalid post type or taxonomy slug.', 'cpt-taxonomy-syncer' ),
 				array( 'status' => 400 )
 			);
 		}
@@ -314,7 +349,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		if ( ! $syncer ) {
 			return new WP_Error(
 				'syncer_not_found',
-				'No syncer instance found for this CPT/taxonomy pair.',
+				__( 'No syncer instance found for this CPT/taxonomy pair.', 'cpt-taxonomy-syncer' ),
 				array( 'status' => 404 )
 			);
 		}
@@ -325,7 +360,12 @@ class CPT_Tax_Syncer_REST_Controller {
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => sprintf( 'Synced %d posts to terms with %d errors.', $result['synced'], $result['errors'] ),
+				'message' => sprintf(
+					/* translators: %1$d: number of synced items, %2$d: number of errors */
+					_n( 'Synced %1$d post to term with %2$d error.', 'Synced %1$d posts to terms with %2$d errors.', $result['synced'], 'cpt-taxonomy-syncer' ),
+					$result['synced'],
+					$result['errors']
+				),
 				'synced'  => $result['synced'],
 				'errors'  => $result['errors'],
 			),
@@ -341,14 +381,20 @@ class CPT_Tax_Syncer_REST_Controller {
 	 */
 	public function sync_terms_to_posts( $request ) {
 		// Get CPT and taxonomy slugs from request or use the instance values.
-		$cpt_slug      = $request->get_param( 'cpt_slug' ) ?: $this->cpt_slug;
-		$taxonomy_slug = $request->get_param( 'taxonomy_slug' ) ?: $this->taxonomy_slug;
+		$cpt_slug = $request->get_param( 'cpt_slug' );
+		if ( empty( $cpt_slug ) ) {
+			$cpt_slug = $this->cpt_slug;
+		}
+		$taxonomy_slug = $request->get_param( 'taxonomy_slug' );
+		if ( empty( $taxonomy_slug ) ) {
+			$taxonomy_slug = $this->taxonomy_slug;
+		}
 
 		// Validate that both slugs exist.
 		if ( ! post_type_exists( $cpt_slug ) || ! taxonomy_exists( $taxonomy_slug ) ) {
 			return new WP_Error(
 				'invalid_slugs',
-				'Invalid post type or taxonomy slug.',
+				__( 'Invalid post type or taxonomy slug.', 'cpt-taxonomy-syncer' ),
 				array( 'status' => 400 )
 			);
 		}
@@ -359,7 +405,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		if ( ! $syncer ) {
 			return new WP_Error(
 				'syncer_not_found',
-				'No syncer instance found for this CPT/taxonomy pair.',
+				__( 'No syncer instance found for this CPT/taxonomy pair.', 'cpt-taxonomy-syncer' ),
 				array( 'status' => 404 )
 			);
 		}
@@ -370,7 +416,12 @@ class CPT_Tax_Syncer_REST_Controller {
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => sprintf( 'Synced %d terms to posts with %d errors.', $result['synced'], $result['errors'] ),
+				'message' => sprintf(
+					/* translators: %1$d: number of synced items, %2$d: number of errors */
+					_n( 'Synced %1$d term to post with %2$d error.', 'Synced %1$d terms to posts with %2$d errors.', $result['synced'], 'cpt-taxonomy-syncer' ),
+					$result['synced'],
+					$result['errors']
+				),
 				'synced'  => $result['synced'],
 				'errors'  => $result['errors'],
 			),
@@ -385,18 +436,33 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * @return WP_REST_Response|WP_Error The response or error
 	 */
 	public function init_batch_sync( $request ) {
-		$cpt_slug      = $request->get_param( 'cpt_slug' ) ?: $this->cpt_slug;
-		$taxonomy_slug = $request->get_param( 'taxonomy_slug' ) ?: $this->taxonomy_slug;
-		$operation     = $request->get_param( 'operation' ); // 'posts-to-terms' or 'terms-to-posts'.
+		$cpt_slug = $request->get_param( 'cpt_slug' );
+		if ( empty( $cpt_slug ) ) {
+			$cpt_slug = $this->cpt_slug;
+		}
+		$taxonomy_slug = $request->get_param( 'taxonomy_slug' );
+		if ( empty( $taxonomy_slug ) ) {
+			$taxonomy_slug = $this->taxonomy_slug;
+		}
+		// 'posts-to-terms' or 'terms-to-posts'.
+		$operation = $request->get_param( 'operation' );
 
 		if ( ! $operation || ! in_array( $operation, array( 'posts-to-terms', 'terms-to-posts' ), true ) ) {
-			return new WP_Error( 'invalid_operation', 'Invalid operation. Must be "posts-to-terms" or "terms-to-posts".', array( 'status' => 400 ) );
+			return new WP_Error(
+				'invalid_operation',
+				__( 'Invalid operation. Must be "posts-to-terms" or "terms-to-posts".', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $cpt_slug, $taxonomy_slug );
 
 		if ( ! $syncer ) {
-			return new WP_Error( 'syncer_not_found', 'No syncer instance found for this CPT/taxonomy pair.', array( 'status' => 404 ) );
+			return new WP_Error(
+				'syncer_not_found',
+				__( 'No syncer instance found for this CPT/taxonomy pair.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
 		}
 
 		// Get total count.
@@ -424,7 +490,11 @@ class CPT_Tax_Syncer_REST_Controller {
 				'success'  => true,
 				'batch_id' => $batch_id,
 				'total'    => $total,
-				'message'  => sprintf( 'Batch sync initialized. Total items: %d', $total ),
+				'message'  => sprintf(
+					/* translators: %d: total number of items */
+					__( 'Batch sync initialized. Total items: %d', 'cpt-taxonomy-syncer' ),
+					$total
+				),
 			),
 			200
 		);
@@ -440,19 +510,31 @@ class CPT_Tax_Syncer_REST_Controller {
 		$batch_id = $request->get_param( 'batch_id' );
 
 		if ( ! $batch_id ) {
-			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+			return new WP_Error(
+				'missing_batch_id',
+				__( 'Batch ID is required.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$batch_data = get_transient( $batch_id );
 
 		if ( false === $batch_data ) {
-			return new WP_Error( 'batch_not_found', 'Batch not found or expired.', array( 'status' => 404 ) );
+			return new WP_Error(
+				'batch_not_found',
+				__( 'Batch not found or expired.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
 		}
 
 		$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $batch_data['cpt_slug'], $batch_data['taxonomy_slug'] );
 
 		if ( ! $syncer ) {
-			return new WP_Error( 'syncer_not_found', 'No syncer instance found.', array( 'status' => 404 ) );
+			return new WP_Error(
+				'syncer_not_found',
+				__( 'No syncer instance found.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
 		}
 
 		// Process one batch.
@@ -485,8 +567,18 @@ class CPT_Tax_Syncer_REST_Controller {
 				'errors'     => $batch_data['errors'],
 				'percentage' => $batch_data['total'] > 0 ? round( ( $batch_data['processed'] / $batch_data['total'] ) * 100, 2 ) : 0,
 				'message'    => $is_complete
-					? sprintf( 'Batch sync complete! Synced %d items with %d errors.', $batch_data['synced'], $batch_data['errors'] )
-					: sprintf( 'Processed %d of %d items...', $batch_data['processed'], $batch_data['total'] ),
+					? sprintf(
+						/* translators: %1$d: number of synced items, %2$d: number of errors */
+						_n( 'Batch sync complete! Synced %1$d item with %2$d error.', 'Batch sync complete! Synced %1$d items with %2$d errors.', $batch_data['synced'], 'cpt-taxonomy-syncer' ),
+						$batch_data['synced'],
+						$batch_data['errors']
+					)
+					: sprintf(
+						/* translators: %d: number of processed items, %d: total number of items */
+						__( 'Processed %1$d of %2$d items...', 'cpt-taxonomy-syncer' ),
+						$batch_data['processed'],
+						$batch_data['total']
+					),
 			),
 			200
 		);
@@ -502,13 +594,21 @@ class CPT_Tax_Syncer_REST_Controller {
 		$batch_id = $request->get_param( 'batch_id' );
 
 		if ( ! $batch_id ) {
-			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+			return new WP_Error(
+				'missing_batch_id',
+				__( 'Batch ID is required.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$batch_data = get_transient( $batch_id );
 
 		if ( false === $batch_data ) {
-			return new WP_Error( 'batch_not_found', 'Batch not found or expired.', array( 'status' => 404 ) );
+			return new WP_Error(
+				'batch_not_found',
+				__( 'Batch not found or expired.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
 		}
 
 		$is_complete = $batch_data['processed'] >= $batch_data['total'];
@@ -537,7 +637,11 @@ class CPT_Tax_Syncer_REST_Controller {
 		$batch_id = $request->get_param( 'batch_id' );
 
 		if ( ! $batch_id ) {
-			return new WP_Error( 'missing_batch_id', 'Batch ID is required.', array( 'status' => 400 ) );
+			return new WP_Error(
+				'missing_batch_id',
+				__( 'Batch ID is required.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		delete_transient( $batch_id );
@@ -545,7 +649,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		return new WP_REST_Response(
 			array(
 				'success' => true,
-				'message' => 'Batch data cleaned up.',
+				'message' => __( 'Batch data cleaned up.', 'cpt-taxonomy-syncer' ),
 			),
 			200
 		);
@@ -557,8 +661,8 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * This is a lightweight hook to ensure term responses have consistent formatting.
 	 *
 	 * @param WP_REST_Response $response The response object.
-	 * @param WP_Term          $term The term object.
-	 * @param WP_REST_Request  $request The request object.
+	 * @param WP_Term          $term The term object (unused but required by filter signature).
+	 * @param WP_REST_Request  $request The request object (unused but required by filter signature).
 	 * @return WP_REST_Response The modified response
 	 */
 	public function prepare_term_response( $response, $term, $request ) {
