@@ -23,6 +23,10 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies and provi
 - Manual bulk sync operations for existing content
 - Optional archive redirection from taxonomy pages to post pages
 
+## Try It Out
+
+**[Playground Demo](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/playground/_playground/blueprint.json)** - Try the plugin in your browser without any installation!
+
 ## Installation
 
 1. Upload the plugin folder to `/wp-content/plugins/`

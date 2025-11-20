@@ -1,0 +1,36 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"landingPage": "/wp-admin/",
+	"preferredVersions": {
+		"php": "8.0",
+		"wp": "latest"
+	},
+	"steps": [
+		{
+			"step": "login",
+			"username": "admin",
+			"password": "password"
+		},
+		{
+			"step": "installPlugin",
+			"pluginZipFile": {
+				"resource": "url",
+				"url": "https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/download/v1.1.0/cpt-taxonomy-syncer.zip"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php\n// Create a demo custom post type and taxonomy for testing\nregister_post_type('genre', array(\n\t'public' => true,\n\t'label' => 'Genres',\n\t'supports' => array('title', 'editor'),\n\t'show_in_rest' => true,\n));\n\nregister_taxonomy('genre_tax', 'genre', array(\n\t'public' => true,\n\t'label' => 'Genre Categories',\n\t'show_in_rest' => true,\n));\n\n// Configure the sync pair\n$pairs = array(\n\tarray(\n\t\t'cpt_slug' => 'genre',\n\t\t'taxonomy_slug' => 'genre_tax',\n\t\t'enable_redirect' => false,\n\t),\n);\nupdate_option('cpt_tax_syncer_pairs', $pairs);\n\n// Create a few demo posts to showcase syncing\nwp_insert_post(array(\n\t'post_title' => 'Comedy',\n\t'post_type' => 'genre',\n\t'post_status' => 'publish',\n));\n\nwp_insert_post(array(\n\t'post_title' => 'Drama',\n\t'post_type' => 'genre',\n\t'post_status' => 'publish',\n));\n\nwp_insert_post(array(\n\t'post_title' => 'Action',\n\t'post_type' => 'genre',\n\t'post_status' => 'publish',\n));\n"
+		},
+		{
+			"step": "setSiteOptions",
+			"options": {
+				"blogname": "CPT-Taxonomy Syncer Demo"
+			}
+		}
+	]
+}
+
