@@ -475,21 +475,43 @@ class CPT_Taxonomy_Syncer {
 			return;
 		}
 
-		// Get the post title before it's deleted.
-		$post = get_post( $post_id );
-		if ( ! $post ) {
-			return;
-		}
-
 		// Set the deletion flag.
 		self::$is_deleting = true;
 
-		// Find the corresponding term by name.
-		$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
+		// Find the corresponding term using the meta relationship (most reliable).
+		// This works even when term names are modified for duplicate titles.
+		$meta_key = '_term_id_' . $this->taxonomy_slug;
+		$term_id  = get_post_meta( $post_id, $meta_key, true );
 
-		// Delete the term if it exists.
-		if ( $term && ! is_wp_error( $term ) ) {
-			wp_delete_term( $term->term_id, $this->taxonomy_slug );
+		if ( $term_id ) {
+			// Verify the term exists and is linked to this post.
+			$term = get_term( $term_id, $this->taxonomy_slug );
+
+			if ( $term && ! is_wp_error( $term ) ) {
+				// Double-check the term is linked to this post (safety check).
+				$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+
+				if ( (int) $linked_post_id === (int) $post_id ) {
+					// Delete the term.
+					wp_delete_term( $term_id, $this->taxonomy_slug );
+				}
+			}
+		} else {
+			// Fallback: try to find term by post title (for legacy data without meta).
+			$post = get_post( $post_id );
+			if ( $post ) {
+				$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
+
+				// Delete the term if it exists and is not linked to a different post.
+				if ( $term && ! is_wp_error( $term ) ) {
+					$linked_post_id = get_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, true );
+
+					// Only delete if not linked or linked to this post.
+					if ( ! $linked_post_id || (int) $linked_post_id === (int) $post_id ) {
+						wp_delete_term( $term->term_id, $this->taxonomy_slug );
+					}
+				}
+			}
 		}
 
 		// Reset the deletion flag.
