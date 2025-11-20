@@ -3,7 +3,8 @@
 		"squizlabs/php_codesniffer": "^3.10",
 		"wp-coding-standards/wpcs": "^3.1",
 		"dealerdirect/phpcodesniffer-composer-installer": "^0.7",
-		"phpcompatibility/phpcompatibility-wp": "*"
+		"phpcompatibility/phpcompatibility-wp": "*",
+		"friendsofphp/php-cs-fixer": "^3.90"
 	},
 	"scripts": {
 		"lint": "phpcs",

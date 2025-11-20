@@ -1,43 +1,16 @@
 {
-	"phpcs.enable": true,
-	"phpcs.executablePath": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcs",
-	"phpcs.standard": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/phpcs.xml",
-	"phpcs.showSources": true,
-	"phpcs.severity": 1,
-	"editor.formatOnSave": true,
-	"editor.codeActionsOnSave": {
-		"source.fixAll": "explicit",
-		"source.fixAll.eslint": "explicit",
-		"source.fixAll.stylelint": "explicit"
-	},
-	"[php]": {
-		"editor.defaultFormatter": "junstyle.php-cs-fixer"
-	},
-	"php.validate.enable": false,
-	"php.suggest.basic": false,
-	"phpcs.lintOnOpen": true,
-	"phpcs.lintOnSave": true,
-	"files.exclude": {
-		"*/vendor/*": true,
-		"*/node_modules/*": true,
-		"*/build/*": true
-	},
-	"phpsab.executablePathCS": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcs",
-	"phpsab.executablePathCBF": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/vendor/bin/phpcbf",
-	"phpsab.standard": "/Users/philhoyt/Documents/Projects/CPT-Taxonomy-Syncer/phpcs.xml",
-	"editor.defaultFormatter": null,
-	"eslint.validate": ["javascript", "javascriptreact"],
-	"stylelint.validate": ["css", "scss"],
-	"css.validate": false,
-	"scss.validate": false,
-	"javascript.validate.enable": false,
-	"[javascript]": {
-		"editor.defaultFormatter": "dbaeumer.vscode-eslint"
-	},
-	"[javascriptreact]": {
-		"editor.defaultFormatter": "dbaeumer.vscode-eslint"
-	},
-	"[scss]": {
-		"editor.defaultFormatter": "stylelint.vscode-stylelint"
-	}
+	"php-cs-fixer.executablePath": "${workspaceFolder}/vendor/bin/php-cs-fixer",
+	"php-cs-fixer.executablePathWindows": "${workspaceFolder}/vendor/bin/php-cs-fixer.bat",
+	"php-cs-fixer.onsave": false,
+	"php-cs-fixer.config": ".php-cs-fixer.php",
+	"php-cs-fixer.allowRisky": false,
+	"php-cs-fixer.pathMode": "override",
+	"php-cs-fixer.exclude": [
+		"vendor/**",
+		"node_modules/**"
+	],
+	"php-cs-fixer.autoFixByBracket": true,
+	"php-cs-fixer.autoFixBySemicolon": false,
+	"php-cs-fixer.formatHtml": true,
+	"php-cs-fixer.documentFormattingProvider": true
 }
