@@ -3,9 +3,11 @@
  * Admin class for CPT-Taxonomy Syncer
  *
  * Handles admin UI and settings
+ *
+ * @package CPT_Taxonomy_Syncer
  */
 
-// Exit if accessed directly
+// Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -39,6 +41,9 @@ class CPT_Tax_Syncer_Admin {
 
 		// Handle column sorting.
 		add_action( 'pre_get_posts', array( $this, 'handle_column_sorting' ) );
+
+		// Add synced post info to term edit pages.
+		add_action( 'init', array( $this, 'add_term_edit_info' ), 20 );
 	}
 
 	/**
@@ -176,7 +181,7 @@ class CPT_Tax_Syncer_Admin {
 							<?php foreach ( $pairs as $index => $pair ) : ?>
 								<tr>
 									<td>
-										<select name="cpt_tax_syncer_pairs[<?php echo $index; ?>][cpt_slug]" required>
+										<select name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][cpt_slug]" required>
 											<option value="">Select a post type</option>
 											<?php foreach ( $post_types as $post_type ) : ?>
 												<option value="<?php echo esc_attr( $post_type->name ); ?>" <?php selected( $pair['cpt_slug'], $post_type->name ); ?>>
@@ -186,7 +191,7 @@ class CPT_Tax_Syncer_Admin {
 										</select>
 									</td>
 									<td>
-										<select name="cpt_tax_syncer_pairs[<?php echo $index; ?>][taxonomy_slug]" required>
+										<select name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][taxonomy_slug]" required>
 											<option value="">Select a taxonomy</option>
 											<?php foreach ( $taxonomies as $taxonomy ) : ?>
 												<option value="<?php echo esc_attr( $taxonomy->name ); ?>" <?php selected( $pair['taxonomy_slug'], $taxonomy->name ); ?>>
@@ -196,7 +201,7 @@ class CPT_Tax_Syncer_Admin {
 										</select>
 									</td>
 									<td>
-										<input type="checkbox" name="cpt_tax_syncer_pairs[<?php echo $index; ?>][enable_redirect]" value="1" <?php checked( isset( $pair['enable_redirect'] ) ? $pair['enable_redirect'] : false ); ?>>
+										<input type="checkbox" name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][enable_redirect]" value="1" <?php checked( isset( $pair['enable_redirect'] ) ? $pair['enable_redirect'] : false ); ?>>
 									</td>
 									<td>
 										<button type="button" class="button remove-pair">Remove</button>
@@ -376,9 +381,9 @@ class CPT_Tax_Syncer_Admin {
 		}
 
 		// Get the linked term ID from post meta.
-		$meta_key   = '_term_id_' . $current_pair['taxonomy_slug'];
-		$term_id    = get_post_meta( $post_id, $meta_key, true );
-		$taxonomy   = get_taxonomy( $current_pair['taxonomy_slug'] );
+		$meta_key = '_term_id_' . $current_pair['taxonomy_slug'];
+		$term_id  = get_post_meta( $post_id, $meta_key, true );
+		$taxonomy = get_taxonomy( $current_pair['taxonomy_slug'] );
 
 		if ( $term_id ) {
 			$term = get_term( $term_id, $current_pair['taxonomy_slug'] );
@@ -423,7 +428,7 @@ class CPT_Tax_Syncer_Admin {
 		$orderby = $query->get( 'orderby' );
 
 		if ( 'synced_term' === $orderby ) {
-			$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+			$pairs     = get_option( 'cpt_tax_syncer_pairs', array() );
 			$post_type = $query->get( 'post_type' );
 
 			// Find the pair for this post type.
@@ -441,5 +446,98 @@ class CPT_Tax_Syncer_Admin {
 				$query->set( 'orderby', 'meta_value' );
 			}
 		}
+	}
+
+	/**
+	 * Add synced post info to term edit pages
+	 */
+	public function add_term_edit_info() {
+		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+
+		foreach ( $pairs as $pair ) {
+			$taxonomy_slug = $pair['taxonomy_slug'];
+
+			// Add fields to term edit form.
+			add_action( $taxonomy_slug . '_edit_form_fields', array( $this, 'render_term_sync_info' ), 10, 2 );
+		}
+	}
+
+	/**
+	 * Render synced post info on term edit page
+	 *
+	 * @param WP_Term $term The term object.
+	 * @param string  $taxonomy The taxonomy slug.
+	 */
+	public function render_term_sync_info( $term, $taxonomy ) {
+		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+
+		// Find the pair for this taxonomy.
+		$current_pair = null;
+		foreach ( $pairs as $pair ) {
+			if ( $pair['taxonomy_slug'] === $taxonomy ) {
+				$current_pair = $pair;
+				break;
+			}
+		}
+
+		if ( ! $current_pair ) {
+			return;
+		}
+
+		$cpt_slug = $current_pair['cpt_slug'];
+
+		// Get the linked post ID from term meta.
+		$meta_key       = '_post_id_' . $cpt_slug;
+		$linked_post_id = get_term_meta( $term->term_id, $meta_key, true );
+
+		?>
+		<tr class="form-field term-sync-info-wrap">
+			<th scope="row">
+				<label><?php esc_html_e( 'Synced Post', 'cpt-taxonomy-syncer' ); ?></label>
+			</th>
+			<td>
+				<?php if ( $linked_post_id ) : ?>
+					<?php
+					$linked_post = get_post( $linked_post_id );
+					if ( $linked_post && $linked_post->post_type === $cpt_slug ) :
+						$edit_link = get_edit_post_link( $linked_post_id );
+						$view_link = get_permalink( $linked_post_id );
+						?>
+						<p>
+							<strong><?php esc_html_e( 'Linked Post:', 'cpt-taxonomy-syncer' ); ?></strong>
+							<a href="<?php echo esc_url( $edit_link ); ?>"><?php echo esc_html( $linked_post->post_title ); ?></a>
+							<span class="description">(ID: <?php echo esc_html( $linked_post_id ); ?>)</span>
+							| <a href="<?php echo esc_url( $view_link ); ?>" target="_blank"><?php esc_html_e( 'View', 'cpt-taxonomy-syncer' ); ?></a>
+						</p>
+					<?php else : ?>
+						<p>
+							<span class="description" style="color: #d63638;">
+								<?php esc_html_e( 'Linked post not found (may have been deleted).', 'cpt-taxonomy-syncer' ); ?>
+								<?php esc_html_e( 'Post ID:', 'cpt-taxonomy-syncer' ); ?> <?php echo esc_html( $linked_post_id ); ?>
+							</span>
+						</p>
+					<?php endif; ?>
+				<?php else : ?>
+					<p>
+						<span class="description" style="color: #999;">
+							<?php esc_html_e( 'Not linked to any post.', 'cpt-taxonomy-syncer' ); ?>
+						</span>
+					</p>
+				<?php endif; ?>
+
+				<div style="margin-top: 15px; padding: 10px; background: #f0f0f1; border-left: 4px solid #2271b1;">
+					<p style="margin: 0 0 8px 0;">
+						<strong><?php esc_html_e( 'Developer Reference:', 'cpt-taxonomy-syncer' ); ?></strong>
+					</p>
+					<p style="margin: 0; font-family: monospace; font-size: 12px;">
+						<strong><?php esc_html_e( 'Term Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
+						<code><?php echo esc_html( $meta_key ); ?></code><br><br>
+						<strong><?php esc_html_e( 'Post Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
+						<code>_term_id_<?php echo esc_html( $taxonomy ); ?></code>
+					</p>
+				</div>
+			</td>
+		</tr>
+		<?php
 	}
 }
