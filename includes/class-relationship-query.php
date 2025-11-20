@@ -18,6 +18,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CPT_Tax_Syncer_Relationship_Query {
 
 	/**
+	 * Static storage for block settings (used as fallback when block attributes aren't available)
+	 *
+	 * @var array Keyed by block ID to avoid conflicts
+	 */
+	private static $block_settings_cache = array();
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -147,9 +154,15 @@ class CPT_Tax_Syncer_Relationship_Query {
 			return $block_content;
 		}
 
-		// Store the settings globally so the query_loop_block_query_vars filter can access them.
-		global $cpt_tax_syncer_current_block_settings;
-		$cpt_tax_syncer_current_block_settings = $syncer_settings;
+		// Store the settings in static cache (keyed by block ID if available) as fallback.
+		// This is only used if block attributes aren't available in modify_query_vars.
+		$block_id                                = $block['attrs']['id'] ?? $block['attrs']['anchor'] ?? uniqid( 'block_', true );
+		self::$block_settings_cache[ $block_id ] = $syncer_settings;
+
+		// Clean up old cache entries to prevent memory leaks (keep only last 10).
+		if ( count( self::$block_settings_cache ) > 10 ) {
+			self::$block_settings_cache = array_slice( self::$block_settings_cache, -10, 10, true );
+		}
 
 		return $block_content;
 	}
@@ -190,10 +203,19 @@ class CPT_Tax_Syncer_Relationship_Query {
 			}
 		}
 
-		// If still not found, try global variable.
+		// If still not found, try static cache as last resort fallback.
+		// This should rarely be needed if block attributes are properly set.
 		if ( empty( $syncer_settings['useSyncedRelationship'] ) ) {
-			global $cpt_tax_syncer_current_block_settings;
-			$syncer_settings = $cpt_tax_syncer_current_block_settings ?? array();
+			// Try to get block ID from attributes or context.
+			$block_id = $block->attributes['id'] ?? $block->attributes['anchor'] ?? null;
+
+			if ( $block_id && isset( self::$block_settings_cache[ $block_id ] ) ) {
+				$syncer_settings = self::$block_settings_cache[ $block_id ];
+			} elseif ( ! empty( self::$block_settings_cache ) ) {
+				// Fallback: use most recent cache entry if block ID not available.
+				// This is not ideal but better than a global variable.
+				$syncer_settings = end( self::$block_settings_cache );
+			}
 		}
 
 		// Always get the target post type from the query postType.
