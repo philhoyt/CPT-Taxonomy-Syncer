@@ -580,6 +580,7 @@ class CPT_Taxonomy_Syncer {
 	 * @return array Results array with synced count and errors
 	 */
 	public function bulk_sync_posts_to_terms() {
+		// Get all posts at once (1 query).
 		$posts = get_posts(
 			array(
 				'post_type'      => $this->cpt_slug,
@@ -588,12 +589,47 @@ class CPT_Taxonomy_Syncer {
 			)
 		);
 
+		if ( empty( $posts ) ) {
+			return array(
+				'synced' => 0,
+				'errors' => 0,
+			);
+		}
+
+		// Get all terms at once (1 query) and build lookup arrays.
+		$all_terms = get_terms(
+			array(
+				'taxonomy'   => $this->taxonomy_slug,
+				'hide_empty' => false,
+			)
+		);
+
+		// Build lookup array: term name => term object.
+		$terms_by_name = array();
+		$meta_key      = CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug;
+
+		// Also build a map of existing term meta relationships to avoid unnecessary updates.
+		$term_meta_by_post_id = array();
+
+		if ( ! is_wp_error( $all_terms ) && ! empty( $all_terms ) ) {
+			foreach ( $all_terms as $term ) {
+				$terms_by_name[ $term->name ] = $term;
+
+				// Get existing meta relationship for this term.
+				$linked_post_id = get_term_meta( $term->term_id, $meta_key, true );
+				if ( $linked_post_id ) {
+					$term_meta_by_post_id[ (int) $linked_post_id ] = $term->term_id;
+				}
+			}
+		}
+
 		$synced = 0;
 		$errors = 0;
 
+		// Now loop through posts and use the lookup arrays (no queries in loop).
 		foreach ( $posts as $post ) {
-			// Check if a term with this name already exists.
-			$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
+			// Check if a term with this name already exists (using lookup array).
+			$term = isset( $terms_by_name[ $post->post_title ] ) ? $terms_by_name[ $post->post_title ] : null;
 
 			if ( ! $term ) {
 				// Create a new term.
@@ -601,14 +637,29 @@ class CPT_Taxonomy_Syncer {
 
 				if ( ! is_wp_error( $result ) ) {
 					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post->ID );
+					update_term_meta( $result['term_id'], $meta_key, $post->ID );
+
+					// Update lookup arrays for consistency.
+					$new_term = get_term( $result['term_id'], $this->taxonomy_slug );
+					if ( $new_term && ! is_wp_error( $new_term ) ) {
+						$terms_by_name[ $new_term->name ]  = $new_term;
+						$term_meta_by_post_id[ $post->ID ] = $result['term_id'];
+					}
+
 					++$synced;
 				} else {
 					++$errors;
 				}
 			} else {
-				// Update the term meta to ensure linkage.
-				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post->ID );
+				// Check if meta relationship already exists and is correct.
+				$existing_linked_post_id = isset( $term_meta_by_post_id[ $post->ID ] ) ? $term_meta_by_post_id[ $post->ID ] : null;
+
+				// Only update if the relationship doesn't exist or is different.
+				if ( $existing_linked_post_id !== $term->term_id ) {
+					update_term_meta( $term->term_id, $meta_key, $post->ID );
+					$term_meta_by_post_id[ $post->ID ] = $term->term_id;
+				}
+
 				++$synced;
 			}
 		}
@@ -625,6 +676,7 @@ class CPT_Taxonomy_Syncer {
 	 * @return array Results array with synced count and errors
 	 */
 	public function bulk_sync_terms_to_posts() {
+		// Get all terms at once (1 query).
 		$terms = get_terms(
 			array(
 				'taxonomy'   => $this->taxonomy_slug,
@@ -632,12 +684,51 @@ class CPT_Taxonomy_Syncer {
 			)
 		);
 
+		if ( is_wp_error( $terms ) || empty( $terms ) ) {
+			return array(
+				'synced' => 0,
+				'errors' => 0,
+			);
+		}
+
+		// Get all posts at once (1 query) and build lookup arrays.
+		$all_posts = get_posts(
+			array(
+				'post_type'      => $this->cpt_slug,
+				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
+				'posts_per_page' => -1,
+			)
+		);
+
+		// Build lookup arrays.
+		$posts_by_title = array();
+		$posts_by_meta  = array();
+		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
+
+		// Build lookup: post title => post object (for title-based matching).
+		// Also build lookup: term_id => post object (for meta-based matching).
+		foreach ( $all_posts as $post ) {
+			$posts_by_title[ $post->post_title ] = $post;
+
+			// Get existing meta relationship.
+			$linked_term_id = get_post_meta( $post->ID, $meta_key, true );
+			if ( $linked_term_id ) {
+				$posts_by_meta[ (int) $linked_term_id ] = $post;
+			}
+		}
+
 		$synced = 0;
 		$errors = 0;
 
+		// Now loop through terms and use the lookup arrays (no queries in loop).
 		foreach ( $terms as $term ) {
-			// Check if a post linked to this term already exists (by meta or title).
-			$existing_post = $this->find_post_by_term( $term->term_id, $term->name );
+			// First, check if there's a post linked via meta relationship (most reliable).
+			$existing_post = isset( $posts_by_meta[ $term->term_id ] ) ? $posts_by_meta[ $term->term_id ] : null;
+
+			// Fallback: check by exact title match.
+			if ( ! $existing_post && isset( $posts_by_title[ $term->name ] ) ) {
+				$existing_post = $posts_by_title[ $term->name ];
+			}
 
 			if ( ! $existing_post ) {
 				// Create a new post.
@@ -652,19 +743,50 @@ class CPT_Taxonomy_Syncer {
 
 				if ( ! is_wp_error( $post_id ) ) {
 					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term->term_id );
+					update_post_meta( $post_id, $meta_key, $term->term_id );
 
 					// Store post ID as term meta for future reference.
 					update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
+
+					// Update lookup arrays for consistency.
+					$new_post = get_post( $post_id );
+					if ( $new_post ) {
+						$posts_by_title[ $new_post->post_title ] = $new_post;
+						$posts_by_meta[ $term->term_id ]         = $new_post;
+					}
 
 					++$synced;
 				} else {
 					++$errors;
 				}
 			} else {
-				// Post exists but may not have meta relationship - ensure it's linked.
-				update_post_meta( $existing_post->ID, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term->term_id );
-				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $existing_post->ID );
+				// Post exists - ensure meta relationships are set correctly.
+				$needs_post_meta_update = false;
+				$needs_term_meta_update = false;
+
+				// Check if post meta needs updating.
+				$existing_term_id = get_post_meta( $existing_post->ID, $meta_key, true );
+				if ( (int) $existing_term_id !== $term->term_id ) {
+					$needs_post_meta_update = true;
+				}
+
+				// Check if term meta needs updating.
+				$term_meta_key    = CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug;
+				$existing_post_id = get_term_meta( $term->term_id, $term_meta_key, true );
+				if ( (int) $existing_post_id !== $existing_post->ID ) {
+					$needs_term_meta_update = true;
+				}
+
+				// Only update if needed.
+				if ( $needs_post_meta_update ) {
+					update_post_meta( $existing_post->ID, $meta_key, $term->term_id );
+					$posts_by_meta[ $term->term_id ] = $existing_post;
+				}
+
+				if ( $needs_term_meta_update ) {
+					update_term_meta( $term->term_id, $term_meta_key, $existing_post->ID );
+				}
+
 				++$synced;
 			}
 		}
