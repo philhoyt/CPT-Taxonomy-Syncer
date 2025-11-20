@@ -65,7 +65,7 @@ class CPT_Tax_Syncer_Admin {
 	public function register_settings() {
 		register_setting(
 			'cpt_tax_syncer_settings',
-			'cpt_tax_syncer_pairs',
+			CPT_TAX_SYNCER_OPTION_NAME,
 			array(
 				'type'              => 'array',
 				'sanitize_callback' => array( $this, 'sanitize_pairs' ),
@@ -121,7 +121,7 @@ class CPT_Tax_Syncer_Admin {
 				array(
 					'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
 					'nonce'    => wp_create_nonce( 'wp_rest' ),
-					'pairs'    => get_option( 'cpt_tax_syncer_pairs', array() ),
+					'pairs'    => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
 				)
 			);
 		}
@@ -144,7 +144,7 @@ class CPT_Tax_Syncer_Admin {
 	 * Render settings page
 	 */
 	public function render_settings_page() {
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 		// Get all registered post types.
 		$post_types = get_post_types( array( 'public' => true ), 'objects' );
@@ -297,7 +297,7 @@ class CPT_Tax_Syncer_Admin {
 	 * Add admin columns for synced post types
 	 */
 	public function add_admin_columns() {
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 		// Track which post types we've already added columns for.
 		$processed_post_types = array();
@@ -359,7 +359,7 @@ class CPT_Tax_Syncer_Admin {
 			return;
 		}
 
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 		$post  = get_post( $post_id );
 
 		if ( ! $post ) {
@@ -381,7 +381,7 @@ class CPT_Tax_Syncer_Admin {
 		}
 
 		// Get the linked term ID from post meta.
-		$meta_key = '_term_id_' . $current_pair['taxonomy_slug'];
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $current_pair['taxonomy_slug'];
 		$term_id  = get_post_meta( $post_id, $meta_key, true );
 		$taxonomy = get_taxonomy( $current_pair['taxonomy_slug'] );
 
@@ -428,7 +428,7 @@ class CPT_Tax_Syncer_Admin {
 		$orderby = $query->get( 'orderby' );
 
 		if ( 'synced_term' === $orderby ) {
-			$pairs     = get_option( 'cpt_tax_syncer_pairs', array() );
+			$pairs     = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 			$post_type = $query->get( 'post_type' );
 
 			// Find the pair for this post type.
@@ -441,7 +441,7 @@ class CPT_Tax_Syncer_Admin {
 			}
 
 			if ( $current_pair ) {
-				$meta_key = '_term_id_' . $current_pair['taxonomy_slug'];
+				$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $current_pair['taxonomy_slug'];
 				$query->set( 'meta_key', $meta_key );
 				$query->set( 'orderby', 'meta_value' );
 			}
@@ -452,7 +452,7 @@ class CPT_Tax_Syncer_Admin {
 	 * Add synced post info to term edit pages
 	 */
 	public function add_term_edit_info() {
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 		foreach ( $pairs as $pair ) {
 			$taxonomy_slug = $pair['taxonomy_slug'];
@@ -469,7 +469,7 @@ class CPT_Tax_Syncer_Admin {
 	 * @param string  $taxonomy The taxonomy slug.
 	 */
 	public function render_term_sync_info( $term, $taxonomy ) {
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 		// Find the pair for this taxonomy.
 		$current_pair = null;
@@ -487,7 +487,7 @@ class CPT_Tax_Syncer_Admin {
 		$cpt_slug = $current_pair['cpt_slug'];
 
 		// Get the linked post ID from term meta.
-		$meta_key       = '_post_id_' . $cpt_slug;
+		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_POST . $cpt_slug;
 		$linked_post_id = get_term_meta( $term->term_id, $meta_key, true );
 
 		?>
@@ -533,7 +533,7 @@ class CPT_Tax_Syncer_Admin {
 						<strong><?php esc_html_e( 'Term Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
 						<code><?php echo esc_html( $meta_key ); ?></code><br><br>
 						<strong><?php esc_html_e( 'Post Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code>_term_id_<?php echo esc_html( $taxonomy ); ?></code>
+						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code>
 					</p>
 				</div>
 			</td>

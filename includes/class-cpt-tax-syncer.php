@@ -182,7 +182,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Check if this post is already linked to a term.
-		$meta_key       = '_term_id_' . $this->taxonomy_slug;
+		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
 		$linked_term_id = get_post_meta( $post_id, $meta_key, true );
 
 		// If post is already linked to a term, skip (handled by sync_post_update_to_term for updates).
@@ -207,7 +207,7 @@ class CPT_Taxonomy_Syncer {
 				// Store the term ID in our tracking array.
 				self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
 				// Store post ID as term meta for future reference.
-				update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
+				update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 				// Store term ID as post meta for future reference.
 				update_post_meta( $post_id, $meta_key, $result['term_id'] );
 				// Clean up post tracking.
@@ -218,7 +218,7 @@ class CPT_Taxonomy_Syncer {
 			}
 		} else {
 			// Term exists, check if it's already linked to a different post.
-			$linked_post_id = get_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, true );
+			$linked_post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 			if ( $linked_post_id && (int) $linked_post_id !== (int) $post_id ) {
 				// Term is already linked to a different post.
@@ -243,7 +243,7 @@ class CPT_Taxonomy_Syncer {
 					// Store the term ID in our tracking array.
 					self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
 					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
+					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 					// Store term ID as post meta for future reference.
 					update_post_meta( $post_id, $meta_key, $result['term_id'] );
 					// Clean up post tracking.
@@ -255,7 +255,7 @@ class CPT_Taxonomy_Syncer {
 			} else {
 				// Term exists but is not linked, or is linked to this same post.
 				// Link this post to the existing term.
-				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post_id );
+				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 				update_post_meta( $post_id, $meta_key, $term->term_id );
 			}
 		}
@@ -271,7 +271,7 @@ class CPT_Taxonomy_Syncer {
 		// Skip if this term was created from a post (prevents reverse sync creating duplicate posts).
 		if ( isset( self::$terms_created_from_posts[ $term_id ] ) ) {
 			// Check if meta is set - if so, clean up flag. If not, it will be set soon.
-			$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+			$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 			if ( $linked_post_id ) {
 				// Meta is set, we can safely remove the flag.
 				unset( self::$terms_created_from_posts[ $term_id ] );
@@ -298,14 +298,14 @@ class CPT_Taxonomy_Syncer {
 
 		// First check if term is already linked to a post via meta (most reliable).
 		// This prevents creating duplicate posts when term was created from a post.
-		$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+		$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 		if ( $linked_post_id ) {
 			// Term is already linked to a post, verify the post exists and link is correct.
 			$linked_post = get_post( $linked_post_id );
 			if ( $linked_post && $linked_post->post_type === $this->cpt_slug ) {
 				// Ensure bidirectional link is set.
-				update_post_meta( $linked_post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
+				update_post_meta( $linked_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
 				return;
 			}
 		}
@@ -319,23 +319,23 @@ class CPT_Taxonomy_Syncer {
 				array(
 					'post_title'   => $term->name,
 					'post_content' => $term->description,
-					'post_status'  => 'publish',
+					'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 					'post_type'    => $this->cpt_slug,
 				)
 			);
 
 			if ( ! is_wp_error( $post_id ) ) {
 				// Store term ID as post meta for future reference.
-				update_post_meta( $post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
+				update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
 
 				// Store post ID as term meta for future reference.
-				update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $post_id );
+				update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 			}
 		} else {
 			// Post exists but may not have meta relationship - ensure it's linked.
 			$existing_post_id = $existing_post->ID;
-			update_post_meta( $existing_post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
-			update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $existing_post_id );
+			update_post_meta( $existing_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
+			update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $existing_post_id );
 		}
 	}
 
@@ -386,7 +386,7 @@ class CPT_Taxonomy_Syncer {
 
 				if ( ! is_wp_error( $result ) ) {
 					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
+					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 				}
 			}
 
@@ -415,7 +415,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Get the associated post ID from term meta.
-		$post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 		// Set the update flag to prevent recursion.
 		self::$is_updating = true;
@@ -441,17 +441,17 @@ class CPT_Taxonomy_Syncer {
 				array(
 					'post_title'   => $term->name,
 					'post_content' => $term->description,
-					'post_status'  => 'publish',
+					'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 					'post_type'    => $this->cpt_slug,
 				)
 			);
 
 			if ( ! is_wp_error( $post_id ) ) {
 				// Store term ID as post meta for future reference.
-				update_post_meta( $post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
+				update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
 
 				// Store post ID as term meta for future reference.
-				update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $post_id );
+				update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 			}
 		}
 
@@ -480,7 +480,7 @@ class CPT_Taxonomy_Syncer {
 
 		// Find the corresponding term using the meta relationship (most reliable).
 		// This works even when term names are modified for duplicate titles.
-		$meta_key = '_term_id_' . $this->taxonomy_slug;
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
 		$term_id  = get_post_meta( $post_id, $meta_key, true );
 
 		if ( $term_id ) {
@@ -489,7 +489,7 @@ class CPT_Taxonomy_Syncer {
 
 			if ( $term && ! is_wp_error( $term ) ) {
 				// Double-check the term is linked to this post (safety check).
-				$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+				$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 				if ( (int) $linked_post_id === (int) $post_id ) {
 					// Delete the term.
@@ -504,7 +504,7 @@ class CPT_Taxonomy_Syncer {
 
 				// Delete the term if it exists and is not linked to a different post.
 				if ( $term && ! is_wp_error( $term ) ) {
-					$linked_post_id = get_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, true );
+					$linked_post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 					// Only delete if not linked or linked to this post.
 					if ( ! $linked_post_id || (int) $linked_post_id === (int) $post_id ) {
@@ -539,7 +539,7 @@ class CPT_Taxonomy_Syncer {
 		self::$is_deleting = true;
 
 		// Get the associated post ID from term meta.
-		$post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 		// Delete the post if it exists.
 		if ( $post_id ) {
@@ -563,7 +563,7 @@ class CPT_Taxonomy_Syncer {
 
 			if ( $term && ! is_wp_error( $term ) ) {
 				// Get the associated post ID from term meta.
-				$post_id = get_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, true );
+				$post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 				if ( $post_id ) {
 					// Redirect to the post.
@@ -583,7 +583,7 @@ class CPT_Taxonomy_Syncer {
 		$posts = get_posts(
 			array(
 				'post_type'      => $this->cpt_slug,
-				'post_status'    => 'publish',
+				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 				'posts_per_page' => -1,
 			)
 		);
@@ -601,14 +601,14 @@ class CPT_Taxonomy_Syncer {
 
 				if ( ! is_wp_error( $result ) ) {
 					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post->ID );
+					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post->ID );
 					++$synced;
 				} else {
 					++$errors;
 				}
 			} else {
 				// Update the term meta to ensure linkage.
-				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post->ID );
+				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post->ID );
 				++$synced;
 			}
 		}
@@ -645,17 +645,17 @@ class CPT_Taxonomy_Syncer {
 					array(
 						'post_title'   => $term->name,
 						'post_content' => $term->description,
-						'post_status'  => 'publish',
+						'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 						'post_type'    => $this->cpt_slug,
 					)
 				);
 
 				if ( ! is_wp_error( $post_id ) ) {
 					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, '_term_id_' . $this->taxonomy_slug, $term->term_id );
+					update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term->term_id );
 
 					// Store post ID as term meta for future reference.
-					update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post_id );
+					update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
 
 					++$synced;
 				} else {
@@ -663,8 +663,8 @@ class CPT_Taxonomy_Syncer {
 				}
 			} else {
 				// Post exists but may not have meta relationship - ensure it's linked.
-				update_post_meta( $existing_post->ID, '_term_id_' . $this->taxonomy_slug, $term->term_id );
-				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $existing_post->ID );
+				update_post_meta( $existing_post->ID, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term->term_id );
+				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $existing_post->ID );
 				++$synced;
 			}
 		}
@@ -687,11 +687,11 @@ class CPT_Taxonomy_Syncer {
 	 */
 	private function find_post_by_term( $term_id, $title ) {
 		// First, check if there's a post linked via meta relationship (most reliable).
-		$meta_key = '_term_id_' . $this->taxonomy_slug;
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
 		$posts    = get_posts(
 			array(
 				'post_type'      => $this->cpt_slug,
-				'post_status'    => 'publish',
+				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 				'posts_per_page' => 1,
 				'meta_query'     => array(
 					array(
@@ -734,10 +734,11 @@ class CPT_Taxonomy_Syncer {
 				"SELECT ID FROM {$wpdb->posts} 
 				WHERE post_title = %s 
 				AND post_type = %s 
-				AND post_status = 'publish' 
+				AND post_status = %s 
 				LIMIT 1",
 				$title,
-				$this->cpt_slug
+				$this->cpt_slug,
+				CPT_TAX_SYNCER_DEFAULT_POST_STATUS
 			)
 		);
 

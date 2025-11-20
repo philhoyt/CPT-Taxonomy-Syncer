@@ -197,10 +197,11 @@ class CPT_Tax_Syncer_REST_Controller {
 				"SELECT ID FROM {$wpdb->posts} 
 				WHERE post_title = %s 
 				AND post_type = %s 
-				AND post_status = 'publish' 
+				AND post_status = %s 
 				LIMIT 1",
 				$title,
-				$this->cpt_slug
+				$this->cpt_slug,
+				CPT_TAX_SYNCER_DEFAULT_POST_STATUS
 			)
 		);
 
@@ -221,7 +222,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'post_title'   => $title,
 				'post_content' => $content,
-				'post_status'  => 'publish',
+				'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 				'post_type'    => $this->cpt_slug,
 			)
 		);

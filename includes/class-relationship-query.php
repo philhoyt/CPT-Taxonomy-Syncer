@@ -110,7 +110,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 			'cptTaxSyncerQuery',
 			array(
 				'postTypes' => $post_type_options,
-				'pairs'     => get_option( 'cpt_tax_syncer_pairs', array() ),
+				'pairs'     => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
 			)
 		);
 	}
@@ -216,7 +216,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 		$target_post_type = $syncer_settings['targetPostType'] ?? '';
 
 		// Get configured pairs.
-		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 		// Find the relevant pair for the current post type.
 		$current_pair = null;
@@ -248,7 +248,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	private function get_posts_from_terms_query( $query_vars, $pair, $target_post_type, $current_post ) {
 		// Get the term ID associated with the current post.
-		$meta_key = '_term_id_' . $pair['taxonomy_slug'];
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $pair['taxonomy_slug'];
 		$term_id  = get_post_meta( $current_post->ID, $meta_key, true );
 
 		if ( ! $term_id ) {

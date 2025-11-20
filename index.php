@@ -1,13 +1,17 @@
 <?php
 /**
  * Plugin Name: CPT-Taxonomy Syncer
- * Description: Automatically syncs a custom post type with a taxonomy
  * Plugin URI:        https://github.com/philhoyt/CPT-Taxonomy-Syncer
+ * Description: Automatically syncs a custom post type with a taxonomy
  * Version: 1.0.0
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
+ * Tested up to: 6.8
  * Author:            Phil Hoyt
  * Author URI:        https://philhoyt.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       cpt-taxonomy-syncer
  */
 
 // Exit if accessed directly.
@@ -16,9 +20,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'CPT_TAXONOMY_SYNCER_VERSION', '0.0.2' );
+define( 'CPT_TAXONOMY_SYNCER_VERSION', '1.0.0' );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+// Define meta key prefixes.
+define( 'CPT_TAX_SYNCER_META_PREFIX_POST', '_post_id_' );
+define( 'CPT_TAX_SYNCER_META_PREFIX_TERM', '_term_id_' );
+
+// Define option name.
+define( 'CPT_TAX_SYNCER_OPTION_NAME', 'cpt_tax_syncer_pairs' );
+
+// Define default post status for synced posts.
+define( 'CPT_TAX_SYNCER_DEFAULT_POST_STATUS', 'publish' );
 
 // Include required files.
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
@@ -31,7 +45,7 @@ require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query
  */
 function cpt_taxonomy_syncer_init() {
 	// Get configured CPT/taxonomy pairs from options.
-	$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+	$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
 
 	// Initialize each pair.
 	foreach ( $pairs as $pair ) {
