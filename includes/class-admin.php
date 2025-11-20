@@ -33,6 +33,12 @@ class CPT_Tax_Syncer_Admin {
 
 		// Add settings link on plugins page.
 		add_filter( 'plugin_action_links_' . plugin_basename( dirname( __DIR__ ) . '/index.php' ), array( $this, 'add_settings_link' ) );
+
+		// Add admin columns for synced post types.
+		add_action( 'init', array( $this, 'add_admin_columns' ), 20 );
+
+		// Handle column sorting.
+		add_action( 'pre_get_posts', array( $this, 'handle_column_sorting' ) );
 	}
 
 	/**
@@ -280,5 +286,160 @@ class CPT_Tax_Syncer_Admin {
 			</script>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Add admin columns for synced post types
+	 */
+	public function add_admin_columns() {
+		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+
+		// Track which post types we've already added columns for.
+		$processed_post_types = array();
+
+		foreach ( $pairs as $pair ) {
+			$cpt_slug      = $pair['cpt_slug'];
+			$taxonomy_slug = $pair['taxonomy_slug'];
+
+			// Only add column once per post type (use first pair if multiple exist).
+			if ( in_array( $cpt_slug, $processed_post_types, true ) ) {
+				continue;
+			}
+
+			$processed_post_types[] = $cpt_slug;
+
+			// Add column header.
+			add_filter( 'manage_' . $cpt_slug . '_posts_columns', array( $this, 'add_synced_term_column' ) );
+
+			// Populate column content.
+			add_action( 'manage_' . $cpt_slug . '_posts_custom_column', array( $this, 'render_synced_term_column' ), 10, 2 );
+
+			// Make column sortable.
+			add_filter( 'manage_edit-' . $cpt_slug . '_sortable_columns', array( $this, 'make_synced_term_column_sortable' ) );
+		}
+	}
+
+	/**
+	 * Add synced term column to post list
+	 *
+	 * @param array $columns Existing columns.
+	 * @return array Modified columns
+	 */
+	public function add_synced_term_column( $columns ) {
+		// Insert the column after the title column.
+		$new_columns = array();
+		foreach ( $columns as $key => $value ) {
+			$new_columns[ $key ] = $value;
+			if ( 'title' === $key ) {
+				$new_columns['synced_term'] = __( 'Synced Term', 'cpt-taxonomy-syncer' );
+			}
+		}
+
+		// If title column doesn't exist, append to end.
+		if ( ! isset( $new_columns['synced_term'] ) ) {
+			$new_columns['synced_term'] = __( 'Synced Term', 'cpt-taxonomy-syncer' );
+		}
+
+		return $new_columns;
+	}
+
+	/**
+	 * Render synced term column content
+	 *
+	 * @param string $column_name The column name.
+	 * @param int    $post_id The post ID.
+	 */
+	public function render_synced_term_column( $column_name, $post_id ) {
+		if ( 'synced_term' !== $column_name ) {
+			return;
+		}
+
+		$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+		$post  = get_post( $post_id );
+
+		if ( ! $post ) {
+			return;
+		}
+
+		// Find the pair for this post type.
+		$current_pair = null;
+		foreach ( $pairs as $pair ) {
+			if ( $pair['cpt_slug'] === $post->post_type ) {
+				$current_pair = $pair;
+				break;
+			}
+		}
+
+		if ( ! $current_pair ) {
+			echo '—';
+			return;
+		}
+
+		// Get the linked term ID from post meta.
+		$meta_key   = '_term_id_' . $current_pair['taxonomy_slug'];
+		$term_id    = get_post_meta( $post_id, $meta_key, true );
+		$taxonomy   = get_taxonomy( $current_pair['taxonomy_slug'] );
+
+		if ( $term_id ) {
+			$term = get_term( $term_id, $current_pair['taxonomy_slug'] );
+
+			if ( $term && ! is_wp_error( $term ) ) {
+				// Build edit link for the term.
+				$edit_link = admin_url( 'term.php?taxonomy=' . $current_pair['taxonomy_slug'] . '&tag_ID=' . $term_id . '&post_type=' . $post->post_type );
+				printf(
+					'<a href="%s">%s</a>',
+					esc_url( $edit_link ),
+					esc_html( $term->name )
+				);
+			} else {
+				echo '—';
+			}
+		} else {
+			echo '<span style="color: #999;">' . esc_html__( 'Not linked', 'cpt-taxonomy-syncer' ) . '</span>';
+		}
+	}
+
+	/**
+	 * Make synced term column sortable
+	 *
+	 * @param array $columns Sortable columns.
+	 * @return array Modified sortable columns
+	 */
+	public function make_synced_term_column_sortable( $columns ) {
+		$columns['synced_term'] = 'synced_term';
+		return $columns;
+	}
+
+	/**
+	 * Handle sorting by synced term column
+	 *
+	 * @param WP_Query $query The WP_Query object.
+	 */
+	public function handle_column_sorting( $query ) {
+		if ( ! is_admin() || ! $query->is_main_query() ) {
+			return;
+		}
+
+		$orderby = $query->get( 'orderby' );
+
+		if ( 'synced_term' === $orderby ) {
+			$pairs = get_option( 'cpt_tax_syncer_pairs', array() );
+			$post_type = $query->get( 'post_type' );
+
+			// Find the pair for this post type.
+			$current_pair = null;
+			foreach ( $pairs as $pair ) {
+				if ( $pair['cpt_slug'] === $post_type ) {
+					$current_pair = $pair;
+					break;
+				}
+			}
+
+			if ( $current_pair ) {
+				$meta_key = '_term_id_' . $current_pair['taxonomy_slug'];
+				$query->set( 'meta_key', $meta_key );
+				$query->set( 'orderby', 'meta_value' );
+			}
+		}
 	}
 }
