@@ -62,6 +62,20 @@ class CPT_Taxonomy_Syncer {
 	private static $is_updating = false;
 
 	/**
+	 * Array of term IDs that are being created from posts (to prevent reverse sync)
+	 *
+	 * @var array
+	 */
+	private static $terms_created_from_posts = array();
+
+	/**
+	 * Array of post IDs that are currently creating terms (to prevent reverse sync)
+	 *
+	 * @var array
+	 */
+	private static $posts_creating_terms = array();
+
+	/**
 	 * Constructor
 	 *
 	 * @param string $cpt_slug The custom post type slug.
@@ -167,21 +181,82 @@ class CPT_Taxonomy_Syncer {
 			return;
 		}
 
-		// Skip updates (handled by sync_post_update_to_term).
-		if ( $update ) {
+		// Check if this post is already linked to a term.
+		$meta_key       = '_term_id_' . $this->taxonomy_slug;
+		$linked_term_id = get_post_meta( $post_id, $meta_key, true );
+
+		// If post is already linked to a term, skip (handled by sync_post_update_to_term for updates).
+		if ( $linked_term_id ) {
 			return;
 		}
+
+		// If this is marked as an update but the post isn't linked yet, it's likely transitioning
+		// from auto-draft to publish, so treat it as a new post creation and continue.
 
 		// Check if a term with this name already exists.
 		$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
 
 		if ( ! $term ) {
-			// Create a new term.
+			// No term exists, create a new one.
+			// Mark that this post is creating a term to prevent reverse sync.
+			self::$posts_creating_terms[ $post_id ] = $post->post_title;
+
 			$result = wp_insert_term( $post->post_title, $this->taxonomy_slug );
 
 			if ( ! is_wp_error( $result ) ) {
+				// Store the term ID in our tracking array.
+				self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
 				// Store post ID as term meta for future reference.
 				update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
+				// Store term ID as post meta for future reference.
+				update_post_meta( $post_id, $meta_key, $result['term_id'] );
+				// Clean up post tracking.
+				unset( self::$posts_creating_terms[ $post_id ] );
+			} else {
+				// Clean up post tracking on error.
+				unset( self::$posts_creating_terms[ $post_id ] );
+			}
+		} else {
+			// Term exists, check if it's already linked to a different post.
+			$linked_post_id = get_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, true );
+
+			if ( $linked_post_id && (int) $linked_post_id !== (int) $post_id ) {
+				// Term is already linked to a different post.
+				// Create a new term using the post slug to differentiate.
+				$post_slug = $post->post_name;
+				$term_name = $post->post_title;
+
+				// If slug is different from title, append it to make term unique.
+				if ( $post_slug && sanitize_title( $post->post_title ) !== $post_slug ) {
+					$term_name = $post->post_title . ' (' . $post_slug . ')';
+				} else {
+					// If slug matches title, append post ID to ensure uniqueness.
+					$term_name = $post->post_title . ' (ID: ' . $post_id . ')';
+				}
+
+				// Mark that this post is creating a term to prevent reverse sync.
+				self::$posts_creating_terms[ $post_id ] = $term_name;
+
+				$result = wp_insert_term( $term_name, $this->taxonomy_slug, array( 'slug' => $post_slug ) );
+
+				if ( ! is_wp_error( $result ) ) {
+					// Store the term ID in our tracking array.
+					self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
+					// Store post ID as term meta for future reference.
+					update_term_meta( $result['term_id'], '_post_id_' . $this->cpt_slug, $post_id );
+					// Store term ID as post meta for future reference.
+					update_post_meta( $post_id, $meta_key, $result['term_id'] );
+					// Clean up post tracking.
+					unset( self::$posts_creating_terms[ $post_id ] );
+				} else {
+					// Clean up post tracking on error.
+					unset( self::$posts_creating_terms[ $post_id ] );
+				}
+			} else {
+				// Term exists but is not linked, or is linked to this same post.
+				// Link this post to the existing term.
+				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $post_id );
+				update_post_meta( $post_id, $meta_key, $term->term_id );
 			}
 		}
 	}
@@ -193,6 +268,27 @@ class CPT_Taxonomy_Syncer {
 	 * @param int $tt_id   The term taxonomy ID (unused).
 	 */
 	public function sync_term_to_post( $term_id, $tt_id ) {
+		// Skip if this term was created from a post (prevents reverse sync creating duplicate posts).
+		if ( isset( self::$terms_created_from_posts[ $term_id ] ) ) {
+			// Check if meta is set - if so, clean up flag. If not, it will be set soon.
+			$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
+			if ( $linked_post_id ) {
+				// Meta is set, we can safely remove the flag.
+				unset( self::$terms_created_from_posts[ $term_id ] );
+			}
+			return;
+		}
+
+		// Also check if there's a post currently creating a term with this name.
+		$term = get_term( $term_id, $this->taxonomy_slug );
+		if ( $term && ! is_wp_error( $term ) ) {
+			foreach ( self::$posts_creating_terms as $creating_post_id => $creating_term_name ) {
+				if ( $creating_term_name === $term->name ) {
+					return;
+				}
+			}
+		}
+
 		// Get the term.
 		$term = get_term( $term_id, $this->taxonomy_slug );
 
@@ -200,17 +296,24 @@ class CPT_Taxonomy_Syncer {
 			return;
 		}
 
-		// Check if a post with this title already exists.
-		$existing_posts = get_posts(
-			array(
-				'post_type'      => $this->cpt_slug,
-				'post_status'    => 'publish',
-				'title'          => $term->name,
-				'posts_per_page' => 1,
-			)
-		);
+		// First check if term is already linked to a post via meta (most reliable).
+		// This prevents creating duplicate posts when term was created from a post.
+		$linked_post_id = get_term_meta( $term_id, '_post_id_' . $this->cpt_slug, true );
 
-		if ( empty( $existing_posts ) ) {
+		if ( $linked_post_id ) {
+			// Term is already linked to a post, verify the post exists and link is correct.
+			$linked_post = get_post( $linked_post_id );
+			if ( $linked_post && $linked_post->post_type === $this->cpt_slug ) {
+				// Ensure bidirectional link is set.
+				update_post_meta( $linked_post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
+				return;
+			}
+		}
+
+		// Check if a post linked to this term already exists (by meta or title).
+		$existing_post = $this->find_post_by_term( $term_id, $term->name );
+
+		if ( ! $existing_post ) {
 			// Create a new post.
 			$post_id = wp_insert_post(
 				array(
@@ -228,6 +331,11 @@ class CPT_Taxonomy_Syncer {
 				// Store post ID as term meta for future reference.
 				update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $post_id );
 			}
+		} else {
+			// Post exists but may not have meta relationship - ensure it's linked.
+			$existing_post_id = $existing_post->ID;
+			update_post_meta( $existing_post_id, '_term_id_' . $this->taxonomy_slug, $term_id );
+			update_term_meta( $term_id, '_post_id_' . $this->cpt_slug, $existing_post_id );
 		}
 	}
 
@@ -323,8 +431,8 @@ class CPT_Taxonomy_Syncer {
 			);
 
 			// Check for errors (though wp_update_post returns post ID or WP_Error).
-			if ( is_wp_error( $result ) ) {
-				// Log error if needed, but continue to reset flag.
+			if ( is_wp_error( $result ) && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// Log error in debug mode.
 				error_log( 'CPT-Tax Syncer: Failed to update post ' . $post_id . ': ' . $result->get_error_message() );
 			}
 		} else {
@@ -506,17 +614,10 @@ class CPT_Taxonomy_Syncer {
 		$errors = 0;
 
 		foreach ( $terms as $term ) {
-			// Check if a post with this title already exists.
-			$existing_posts = get_posts(
-				array(
-					'post_type'      => $this->cpt_slug,
-					'post_status'    => 'publish',
-					'title'          => $term->name,
-					'posts_per_page' => 1,
-				)
-			);
+			// Check if a post linked to this term already exists (by meta or title).
+			$existing_post = $this->find_post_by_term( $term->term_id, $term->name );
 
-			if ( empty( $existing_posts ) ) {
+			if ( ! $existing_post ) {
 				// Create a new post.
 				$post_id = wp_insert_post(
 					array(
@@ -539,9 +640,9 @@ class CPT_Taxonomy_Syncer {
 					++$errors;
 				}
 			} else {
-				// Update the meta to ensure linkage.
-				update_post_meta( $existing_posts[0]->ID, '_term_id_' . $this->taxonomy_slug, $term->term_id );
-				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $existing_posts[0]->ID );
+				// Post exists but may not have meta relationship - ensure it's linked.
+				update_post_meta( $existing_post->ID, '_term_id_' . $this->taxonomy_slug, $term->term_id );
+				update_term_meta( $term->term_id, '_post_id_' . $this->cpt_slug, $existing_post->ID );
 				++$synced;
 			}
 		}
@@ -550,6 +651,79 @@ class CPT_Taxonomy_Syncer {
 			'synced' => $synced,
 			'errors' => $errors,
 		);
+	}
+
+	/**
+	 * Find a post linked to a term by meta relationship or title
+	 *
+	 * This method first checks for a post linked via meta relationship (most reliable),
+	 * then falls back to exact title match if no meta relationship exists.
+	 *
+	 * @param int    $term_id The term ID to find the linked post for.
+	 * @param string $title   The title to search for (fallback if no meta relationship).
+	 * @return WP_Post|null The linked post object, or null if not found.
+	 */
+	private function find_post_by_term( $term_id, $title ) {
+		// First, check if there's a post linked via meta relationship (most reliable).
+		$meta_key = '_term_id_' . $this->taxonomy_slug;
+		$posts    = get_posts(
+			array(
+				'post_type'      => $this->cpt_slug,
+				'post_status'    => 'publish',
+				'posts_per_page' => 1,
+				'meta_query'     => array(
+					array(
+						'key'   => $meta_key,
+						'value' => $term_id,
+					),
+				),
+			)
+		);
+
+		if ( ! empty( $posts ) ) {
+			return $posts[0];
+		}
+
+		// Fallback: check by exact title match using WP_Query.
+		$post = $this->find_post_by_title( $title );
+
+		if ( $post ) {
+			return $post;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Find a post by exact title match
+	 *
+	 * Uses direct SQL query since WP_Query doesn't support title parameter
+	 * and get_page_by_title() is deprecated.
+	 *
+	 * @param string $title The post title to search for.
+	 * @return WP_Post|null The post object, or null if not found.
+	 */
+	private function find_post_by_title( $title ) {
+		global $wpdb;
+
+		// Use direct SQL query to find post by exact title.
+		$post_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} 
+				WHERE post_title = %s 
+				AND post_type = %s 
+				AND post_status = 'publish' 
+				LIMIT 1",
+				$title,
+				$this->cpt_slug
+			)
+		);
+
+		if ( $post_id ) {
+			return get_post( $post_id );
+		}
+
+		return null;
 	}
 
 	/**
