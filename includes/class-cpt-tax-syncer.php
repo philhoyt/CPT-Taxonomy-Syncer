@@ -113,7 +113,10 @@ class CPT_Taxonomy_Syncer {
 	 * Initialize hooks
 	 */
 	private function init_hooks() {
-		// Ensure taxonomy has REST API support.
+		// Ensure taxonomy has REST API support using WordPress filters.
+		// Hook into taxonomy registration to add REST API support.
+		add_filter( 'register_taxonomy_args', array( $this, 'add_rest_support_to_taxonomy' ), 10, 2 );
+		// Also ensure REST support for already-registered taxonomies.
 		add_action( 'init', array( $this, 'ensure_taxonomy_rest_support' ), 20 );
 
 		// Hook into post creation to sync to taxonomy.
@@ -141,31 +144,73 @@ class CPT_Taxonomy_Syncer {
 	}
 
 	/**
-	 * Ensure taxonomy has REST API support
+	 * Add REST API support to taxonomy via filter (WordPress way)
 	 *
-	 * This function ensures that the taxonomy has REST API support by modifying
-	 * its registration arguments if necessary.
+	 * This filter is called when a taxonomy is registered, allowing us to
+	 * modify its arguments before registration.
+	 *
+	 * @param array  $args     Taxonomy registration arguments.
+	 * @param string $taxonomy Taxonomy slug.
+	 * @return array Modified taxonomy arguments.
 	 */
-	public function ensure_taxonomy_rest_support() {
-		global $wp_taxonomies;
-
-		// If our taxonomy doesn't exist yet, return.
-		if ( ! isset( $wp_taxonomies[ $this->taxonomy_slug ] ) ) {
-			return;
+	public function add_rest_support_to_taxonomy( $args, $taxonomy ) {
+		// Only modify our target taxonomy.
+		if ( $taxonomy !== $this->taxonomy_slug ) {
+			return $args;
 		}
 
 		// Ensure REST API support is enabled.
-		$wp_taxonomies[ $this->taxonomy_slug ]->show_in_rest = true;
+		$args['show_in_rest'] = true;
 
 		// Set REST base to taxonomy slug if not already set.
-		if ( ! isset( $wp_taxonomies[ $this->taxonomy_slug ]->rest_base ) || empty( $wp_taxonomies[ $this->taxonomy_slug ]->rest_base ) ) {
-			$wp_taxonomies[ $this->taxonomy_slug ]->rest_base = $this->taxonomy_slug;
+		if ( empty( $args['rest_base'] ) ) {
+			$args['rest_base'] = $this->taxonomy_slug;
 		}
 
 		// Set REST controller class if not already set.
-		if ( ! isset( $wp_taxonomies[ $this->taxonomy_slug ]->rest_controller_class ) || empty( $wp_taxonomies[ $this->taxonomy_slug ]->rest_controller_class ) ) {
-			$wp_taxonomies[ $this->taxonomy_slug ]->rest_controller_class = 'WP_REST_Terms_Controller';
+		if ( empty( $args['rest_controller_class'] ) ) {
+			$args['rest_controller_class'] = 'WP_REST_Terms_Controller';
 		}
+
+		return $args;
+	}
+
+	/**
+	 * Ensure taxonomy has REST API support for already-registered taxonomies
+	 *
+	 * This function handles taxonomies that were registered before the plugin
+	 * loaded. It uses register_taxonomy() with updated args, which WordPress
+	 * will merge with existing registration.
+	 */
+	public function ensure_taxonomy_rest_support() {
+		// Check if taxonomy exists.
+		if ( ! taxonomy_exists( $this->taxonomy_slug ) ) {
+			return;
+		}
+
+		// Get current taxonomy object to check if REST is already enabled.
+		$taxonomy = get_taxonomy( $this->taxonomy_slug );
+
+		if ( ! $taxonomy ) {
+			return;
+		}
+
+		// If REST support is already enabled, no need to do anything.
+		if ( ! empty( $taxonomy->show_in_rest ) ) {
+			return;
+		}
+
+		// Re-register taxonomy with REST API support.
+		// WordPress will merge these args with existing registration.
+		register_taxonomy(
+			$this->taxonomy_slug,
+			$taxonomy->object_type,
+			array(
+				'show_in_rest'          => true,
+				'rest_base'             => $this->taxonomy_slug,
+				'rest_controller_class' => 'WP_REST_Terms_Controller',
+			)
+		);
 	}
 
 	/**
