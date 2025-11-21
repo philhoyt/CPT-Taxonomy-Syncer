@@ -9,11 +9,11 @@ Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically syncs custom post types with taxonomies, creating bidirectional relationships and providing block editor integration for displaying related content.
+Automatically syncs custom post types with taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
 
 == Description ==
 
-CPT-Taxonomy Syncer automatically creates and maintains bidirectional relationships between custom post types and taxonomies. When you create a post, a corresponding taxonomy term is created (and vice versa), keeping them in perfect sync.
+CPT-Taxonomy Syncer automatically creates and maintains bidirectional relationships between custom post types and taxonomies, effectively creating a "shadow taxonomy" that mirrors your post type. When you create a post, a corresponding taxonomy term is created (and vice versa), keeping them in perfect sync. This shadow taxonomy approach allows you to leverage WordPress's taxonomy system for organizing and querying related content while maintaining the flexibility of custom post types.
 
 = Key Features =
 
@@ -22,16 +22,17 @@ CPT-Taxonomy Syncer automatically creates and maintains bidirectional relationsh
 * **Smart Deletion**: Deletes corresponding items when one is removed, preventing orphaned data
 * **Duplicate Prevention**: Prevents duplicate creation and maintains data integrity
 * **Block Editor Integration**: Adds "Use synced relationship" toggle to Query Loop blocks and Relationship Query Loop block variation
-* **Related Content Display**: Displays posts that share taxonomy terms with the current post
+* **Related Content Display**: Displays posts that share taxonomy terms with the current post using the shadow taxonomy relationship
+* **Shadow Taxonomy System**: Creates a taxonomy that mirrors your post type, enabling powerful relationship queries between related posts
 * **Admin Tools**: Settings page with manual bulk sync operations for existing content
 * **Archive Redirection**: Optional redirect from taxonomy archive pages to corresponding post pages
 
 = Use Cases =
 
-* Creating a directory where each entry is both a post and a category
-* Building a product catalog where products sync with categories
-* Managing a team roster where members sync with departments
-* Any scenario where you need posts and taxonomy terms to stay perfectly in sync
+* Creating a directory where each entry is both a post and a category (shadow taxonomy)
+* Building a product catalog where products sync with categories, enabling related product queries
+* Managing a team roster where members sync with departments, allowing easy filtering and related member displays
+* Any scenario where you need posts and taxonomy terms to stay perfectly in sync while leveraging taxonomy-based relationships
 
 == Installation ==
 

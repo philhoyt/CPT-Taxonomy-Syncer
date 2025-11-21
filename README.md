@@ -1,6 +1,12 @@
 # CPT-Taxonomy Syncer
 
+<<<<<<< Updated upstream
 A WordPress plugin that automatically syncs Post Types with Taxonomies and provides block editor integration for displaying related content.
+=======
+[![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.1.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
+
+A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
+>>>>>>> Stashed changes
 
 ## Features
 
@@ -11,10 +17,16 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies and provi
 - Deletes corresponding items when one is removed
 - Prevents duplicate creation and orphaned data
 
+### Shadow Taxonomy System
+
+- Creates a taxonomy that mirrors your post type, enabling powerful relationship queries
+- Leverages WordPress's taxonomy system for organizing and querying related content
+- Maintains the flexibility of custom post types while providing taxonomy-based relationships
+
 ### Block Editor Integration
 
 - Adds "Use synced relationship" toggle to Query Loop blocks and **Relationship Query Loop** block variation
-- Displays posts that share taxonomy terms with the current post
+- Displays posts that share taxonomy terms with the current post using the shadow taxonomy relationship
 
 ### Admin Tools
 
