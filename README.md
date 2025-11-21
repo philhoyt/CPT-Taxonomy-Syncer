@@ -1,8 +1,8 @@
 # CPT-Taxonomy Syncer
 
-A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
-
 [![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.1.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
+
+A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
 
 ## Features
 
