@@ -1,0 +1,49 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"landingPage": "/wp-admin/tools.php?page=cpt-taxonomy-syncer",
+	"preferredVersions": {
+		"php": "8.0",
+		"wp": "latest"
+	},
+	"steps": [
+		{
+			"step": "login",
+			"username": "admin",
+			"password": "password"
+		},
+		{
+			"step": "installPlugin",
+			"pluginZipFile": {
+				"resource": "url",
+				"url": "https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/download/v1.1.0/cpt-taxonomy-syncer.zip"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "installPlugin",
+			"pluginZipFile": {
+				"resource": "url",
+				"url": "https://github-proxy.com/proxy/?repo=philhoyt/cpt-taxonomy-syncer-demo&branch=main"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "importWxr",
+			"file": {
+				"resource": "url",
+				"url": "https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/demo-content.xml"
+			}
+		},
+		{
+			"step": "setSiteOptions",
+			"options": {
+				"blogname": "CPT-Taxonomy Syncer Demo"
+			}
+		}
+	]
+}
+
