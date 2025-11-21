@@ -16,7 +16,7 @@
 <!-- 7. WordPress will then import each of the posts, pages, comments, categories, etc. -->
 <!--    contained in this file into your site. -->
 
-	<!-- generator="WordPress/6.8.3" created="2025-11-21 18:29" -->
+	<!-- generator="WordPress/6.8.3" created="2025-11-21 18:49" -->
 <rss version="2.0"
 	xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
 	xmlns:content="http://purl.org/rss/1.0/modules/content/"
@@ -27,13 +27,13 @@
 
 <channel>
 	<title>CPT-Taxonomy Syncer Demo</title>
-	<link>https://playground.wordpress.net/scope:honest-cozy-town</link>
+	<link>https://playground.wordpress.net/scope:energetic-peaceful-park</link>
 	<description></description>
-	<pubDate>Fri, 21 Nov 2025 18:29:12 +0000</pubDate>
+	<pubDate>Fri, 21 Nov 2025 18:49:17 +0000</pubDate>
 	<language>en-US</language>
 	<wp:wxr_version>1.2</wp:wxr_version>
-	<wp:base_site_url>https://playground.wordpress.net/scope:honest-cozy-town</wp:base_site_url>
-	<wp:base_blog_url>https://playground.wordpress.net/scope:honest-cozy-town</wp:base_blog_url>
+	<wp:base_site_url>https://playground.wordpress.net/scope:energetic-peaceful-park</wp:base_site_url>
+	<wp:base_blog_url>https://playground.wordpress.net/scope:energetic-peaceful-park</wp:base_blog_url>
 
 		<wp:author><wp:author_id>1</wp:author_id><wp:author_login><![CDATA[admin]]></wp:author_login><wp:author_email><![CDATA[admin@localhost.com]]></wp:author_email><wp:author_display_name><![CDATA[admin]]></wp:author_display_name><wp:author_first_name><![CDATA[]]></wp:author_first_name><wp:author_last_name><![CDATA[]]></wp:author_last_name></wp:author>
 
@@ -42,18 +42,20 @@
 
 		<item>
 		<title><![CDATA[Wolf]]></title>
-		<link>https://playground.wordpress.net/scope:honest-cozy-town/animals/wolf/</link>
+		<link>https://playground.wordpress.net/scope:energetic-peaceful-park/animals/wolf/</link>
 		<pubDate>Fri, 21 Nov 2025 18:27:35 +0000</pubDate>
 		<dc:creator><![CDATA[admin]]></dc:creator>
 		<guid isPermaLink="false">https://playground.wordpress.net/scope:honest-cozy-town/?post_type=animals&#038;p=4</guid>
 		<description></description>
-		<content:encoded><![CDATA[]]></content:encoded>
+		<content:encoded><![CDATA[<!-- wp:paragraph -->
+<p>Wolves are highly social predators known for living and hunting in packs. They thrive in forests and grasslands, where teamwork and communication help them pursue prey over long distances.</p>
+<!-- /wp:paragraph -->]]></content:encoded>
 		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
 		<wp:post_id>4</wp:post_id>
 		<wp:post_date><![CDATA[2025-11-21 18:27:35]]></wp:post_date>
 		<wp:post_date_gmt><![CDATA[2025-11-21 18:27:35]]></wp:post_date_gmt>
-		<wp:post_modified><![CDATA[2025-11-21 18:27:35]]></wp:post_modified>
-		<wp:post_modified_gmt><![CDATA[2025-11-21 18:27:35]]></wp:post_modified_gmt>
+		<wp:post_modified><![CDATA[2025-11-21 18:48:24]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-21 18:48:24]]></wp:post_modified_gmt>
 		<wp:comment_status><![CDATA[closed]]></wp:comment_status>
 		<wp:ping_status><![CDATA[closed]]></wp:ping_status>
 		<wp:post_name><![CDATA[wolf]]></wp:post_name>
@@ -68,18 +70,20 @@
 						</item>
 					<item>
 		<title><![CDATA[Camel]]></title>
-		<link>https://playground.wordpress.net/scope:honest-cozy-town/animals/camel/</link>
+		<link>https://playground.wordpress.net/scope:energetic-peaceful-park/animals/camel/</link>
 		<pubDate>Fri, 21 Nov 2025 18:27:48 +0000</pubDate>
 		<dc:creator><![CDATA[admin]]></dc:creator>
 		<guid isPermaLink="false">https://playground.wordpress.net/scope:honest-cozy-town/?post_type=animals&#038;p=6</guid>
 		<description></description>
-		<content:encoded><![CDATA[]]></content:encoded>
+		<content:encoded><![CDATA[<!-- wp:paragraph -->
+<p>Camels are desert specialists built for extreme heat and scarcity. Their humps store fat for energy, and their long legs and wide feet help them travel effortlessly across sand dunes.</p>
+<!-- /wp:paragraph -->]]></content:encoded>
 		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
 		<wp:post_id>6</wp:post_id>
 		<wp:post_date><![CDATA[2025-11-21 18:27:48]]></wp:post_date>
 		<wp:post_date_gmt><![CDATA[2025-11-21 18:27:48]]></wp:post_date_gmt>
-		<wp:post_modified><![CDATA[2025-11-21 18:28:38]]></wp:post_modified>
-		<wp:post_modified_gmt><![CDATA[2025-11-21 18:28:38]]></wp:post_modified_gmt>
+		<wp:post_modified><![CDATA[2025-11-21 18:48:37]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-21 18:48:37]]></wp:post_modified_gmt>
 		<wp:comment_status><![CDATA[closed]]></wp:comment_status>
 		<wp:ping_status><![CDATA[closed]]></wp:ping_status>
 		<wp:post_name><![CDATA[camel]]></wp:post_name>
@@ -93,18 +97,20 @@
 						</item>
 					<item>
 		<title><![CDATA[Polar Bear]]></title>
-		<link>https://playground.wordpress.net/scope:honest-cozy-town/animals/polar-bear/</link>
+		<link>https://playground.wordpress.net/scope:energetic-peaceful-park/animals/polar-bear/</link>
 		<pubDate>Fri, 21 Nov 2025 18:28:02 +0000</pubDate>
 		<dc:creator><![CDATA[admin]]></dc:creator>
 		<guid isPermaLink="false">https://playground.wordpress.net/scope:honest-cozy-town/?post_type=animals&#038;p=7</guid>
 		<description></description>
-		<content:encoded><![CDATA[]]></content:encoded>
+		<content:encoded><![CDATA[<!-- wp:paragraph -->
+<p>Polar bears are powerful Arctic predators adapted to life on ice. Their thick fur, insulating fat layer, and sharp sense of smell allow them to survive and hunt in frigid tundra environments.</p>
+<!-- /wp:paragraph -->]]></content:encoded>
 		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
 		<wp:post_id>7</wp:post_id>
 		<wp:post_date><![CDATA[2025-11-21 18:28:02]]></wp:post_date>
 		<wp:post_date_gmt><![CDATA[2025-11-21 18:28:02]]></wp:post_date_gmt>
-		<wp:post_modified><![CDATA[2025-11-21 18:28:46]]></wp:post_modified>
-		<wp:post_modified_gmt><![CDATA[2025-11-21 18:28:46]]></wp:post_modified_gmt>
+		<wp:post_modified><![CDATA[2025-11-21 18:48:55]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-21 18:48:55]]></wp:post_modified_gmt>
 		<wp:comment_status><![CDATA[closed]]></wp:comment_status>
 		<wp:ping_status><![CDATA[closed]]></wp:ping_status>
 		<wp:post_name><![CDATA[polar-bear]]></wp:post_name>
@@ -118,18 +124,20 @@
 						</item>
 					<item>
 		<title><![CDATA[Frog]]></title>
-		<link>https://playground.wordpress.net/scope:honest-cozy-town/animals/frog/</link>
+		<link>https://playground.wordpress.net/scope:energetic-peaceful-park/animals/frog/</link>
 		<pubDate>Fri, 21 Nov 2025 18:28:22 +0000</pubDate>
 		<dc:creator><![CDATA[admin]]></dc:creator>
 		<guid isPermaLink="false">https://playground.wordpress.net/scope:honest-cozy-town/?post_type=animals&#038;p=9</guid>
 		<description></description>
-		<content:encoded><![CDATA[]]></content:encoded>
+		<content:encoded><![CDATA[<!-- wp:paragraph -->
+<p>Frogs are amphibians that thrive in wetlands and marshy habitats. Their permeable skin, strong hind legs, and distinctive calls make them icons of vibrant aquatic ecosystems.</p>
+<!-- /wp:paragraph -->]]></content:encoded>
 		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
 		<wp:post_id>9</wp:post_id>
 		<wp:post_date><![CDATA[2025-11-21 18:28:22]]></wp:post_date>
 		<wp:post_date_gmt><![CDATA[2025-11-21 18:28:22]]></wp:post_date_gmt>
-		<wp:post_modified><![CDATA[2025-11-21 18:28:22]]></wp:post_modified>
-		<wp:post_modified_gmt><![CDATA[2025-11-21 18:28:22]]></wp:post_modified_gmt>
+		<wp:post_modified><![CDATA[2025-11-21 18:49:08]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-21 18:49:08]]></wp:post_modified_gmt>
 		<wp:comment_status><![CDATA[closed]]></wp:comment_status>
 		<wp:ping_status><![CDATA[closed]]></wp:ping_status>
 		<wp:post_name><![CDATA[frog]]></wp:post_name>
