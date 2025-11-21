@@ -22,12 +22,14 @@
 			}
 		},
 		{
-			"step": "runPHP",
-			"code": "<?php\nrequire_once ABSPATH . 'wp-load.php';\n\n// Create the plugin directory\n$plugin_dir = WP_CONTENT_DIR . '/plugins/demo-cpt';\nif ( ! is_dir( $plugin_dir ) ) {\n\twp_mkdir_p( $plugin_dir );\n}\n\n// Write the plugin file\n$plugin_file = $plugin_dir . '/demo-cpt.php';\n$plugin_content = '<?php\n/**\n * Plugin Name: Demo CPT for CPT-Taxonomy Syncer\n * Description: Creates a demo custom post type \"Animals\" and taxonomy \"Habitats\" for testing CPT-Taxonomy Syncer\n * Version: 1.0.0\n * Author: Phil Hoyt\n */\n\n// Exit if accessed directly.\nif ( ! defined( \\'ABSPATH\\' ) ) {\n\texit;\n}\n\n/**\n * Register the Animals custom post type\n */\nfunction demo_cpt_register_post_type() {\n\tregister_post_type(\n\t\t\\'animals\\',\n\t\tarray(\n\t\t\t\\'public\\'       => true,\n\t\t\t\\'label\\'        => \\'Animals\\',\n\t\t\t\\'supports\\'     => array( \\'title\\', \\'editor\\', \\'thumbnail\\' ),\n\t\t\t\\'show_in_rest\\' => true,\n\t\t\t\\'has_archive\\'  => true,\n\t\t)\n\t);\n}\nadd_action( \\'init\\', \\'demo_cpt_register_post_type\\' );\n\n/**\n * Register the Habitats taxonomy\n */\nfunction demo_cpt_register_taxonomy() {\n\tregister_taxonomy(\n\t\t\\'habitats\\',\n\t\t\\'animals\\',\n\t\tarray(\n\t\t\t\\'public\\'       => true,\n\t\t\t\\'label\\'        => \\'Habitats\\',\n\t\t\t\\'show_in_rest\\' => true,\n\t\t\t\\'hierarchical\\' => false,\n\t\t)\n\t);\n}\nadd_action( \\'init\\', \\'demo_cpt_register_taxonomy\\' );\n';\nfile_put_contents( $plugin_file, $plugin_content );\n"
-		},
-		{
-			"step": "runPHP",
-			"code": "<?php\nrequire_once ABSPATH . 'wp-load.php';\n\n// Activate the demo CPT plugin\n$plugin = 'demo-cpt/demo-cpt.php';\nif ( ! is_plugin_active( $plugin ) ) {\n\tactivate_plugin( $plugin );\n}\n\n// Configure the sync pair\n$pairs = array(\n\tarray(\n\t\t'cpt_slug' => 'animals',\n\t\t'taxonomy_slug' => 'habitats',\n\t\t'enable_redirect' => false,\n\t),\n);\nupdate_option( 'cpt_tax_syncer_pairs', $pairs );\n"
+			"step": "installPlugin",
+			"pluginZipFile": {
+				"resource": "url",
+				"url": "https://github.com/philhoyt/cpt-taxonomy-syncer-demo/releases/download/v1.0.0/cpt-taxonomy-syncer-demo.zip"
+			},
+			"options": {
+				"activate": true
+			}
 		},
 		{
 			"step": "setSiteOptions",
