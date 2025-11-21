@@ -35,7 +35,7 @@
 			"step": "importWxr",
 			"file": {
 				"resource": "url",
-				"url": "https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/playground/_playground/demo-content.xml"
+				"url": "https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/demo-content.xml"
 			}
 		},
 		{
