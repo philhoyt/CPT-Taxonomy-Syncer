@@ -32,6 +32,10 @@
 			}
 		},
 		{
+			"step": "runPHP",
+			"code": "<?php\nrequire_once ABSPATH . 'wp-load.php';\n\n// Configure the sync pair between habitats CPT and habitat_types taxonomy\n$pairs = array(\n\tarray(\n\t\t'cpt_slug' => 'habitats',\n\t\t'taxonomy_slug' => 'habitat_types',\n\t\t'enable_redirect' => false,\n\t),\n);\nupdate_option( 'cpt_tax_syncer_pairs', $pairs );\n"
+		},
+		{
 			"step": "setSiteOptions",
 			"options": {
 				"blogname": "CPT-Taxonomy Syncer Demo"
