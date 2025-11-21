@@ -32,6 +32,13 @@
 			}
 		},
 		{
+			"step": "importWxr",
+			"file": {
+				"resource": "url",
+				"url": "https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/playground/_playground/demo-content.xml"
+			}
+		},
+		{
 			"step": "setSiteOptions",
 			"options": {
 				"blogname": "CPT-Taxonomy Syncer Demo"
