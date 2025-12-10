@@ -304,11 +304,12 @@ class CPT_Tax_Syncer_REST_Controller {
 				continue;
 			}
 
-			// Get all posts for this CPT.
-			$posts = get_posts(
+			// Get all posts for this CPT (with maximum limit to prevent memory issues).
+			$max_posts_per_query = apply_filters( 'cpt_tax_syncer_max_posts_per_query', 1000 );
+			$posts               = get_posts(
 				array(
 					'post_type'      => $cpt_slug,
-					'posts_per_page' => -1,
+					'posts_per_page' => $max_posts_per_query,
 					'post_status'    => 'any',
 					'fields'         => 'ids', // Only get IDs for performance.
 				)
@@ -481,9 +482,12 @@ class CPT_Tax_Syncer_REST_Controller {
 		// Get all posts of this type that have a synced term.
 		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy;
 
+		// Set maximum limit to prevent memory issues with large datasets.
+		$max_posts_per_query = apply_filters( 'cpt_tax_syncer_max_posts_per_query', 1000 );
+
 		$query_args = array(
 			'post_type'      => $post_type,
-			'posts_per_page' => -1, // Get all for now, we'll paginate after.
+			'posts_per_page' => $max_posts_per_query,
 			'post_status'    => 'any',
 			'meta_query'     => array(
 				array(
@@ -592,7 +596,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			$all_related_posts = get_posts(
 				array(
 					'post_type'      => 'any',
-					'posts_per_page' => -1,
+					'posts_per_page' => $max_posts_per_query,
 					'post_status'    => 'any',
 					'orderby'        => 'menu_order',
 					'order'          => 'ASC',
