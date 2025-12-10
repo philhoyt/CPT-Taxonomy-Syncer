@@ -443,6 +443,8 @@ class CPT_Tax_Syncer_REST_Controller {
 					'posts_per_page' => -1,
 					'post_status'    => 'any',
 					'post__not_in'   => array( $post->ID ),
+					'orderby'        => 'menu_order',
+					'order'          => 'ASC',
 					'tax_query'      => array(
 						array(
 							'taxonomy' => $taxonomy,
@@ -483,7 +485,21 @@ class CPT_Tax_Syncer_REST_Controller {
 				$unordered_posts[] = $related_post;
 			}
 
-			// Combine ordered and unordered posts
+			// Sort unordered posts by menu_order to maintain consistent initial ordering.
+			usort(
+				$unordered_posts,
+				function ( $a, $b ) {
+					$order_a = $a->menu_order ?? 0;
+					$order_b = $b->menu_order ?? 0;
+					if ( $order_a === $order_b ) {
+						// If menu_order is the same, sort by post ID for consistency.
+						return $a->ID - $b->ID;
+					}
+					return $order_a - $order_b;
+				}
+			);
+
+			// Combine ordered and unordered posts.
 			$related_posts = array_merge( $ordered_posts, $unordered_posts );
 
 			$related_posts_data = array();

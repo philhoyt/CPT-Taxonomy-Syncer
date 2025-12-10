@@ -355,6 +355,12 @@ class CPT_Tax_Syncer_Relationship_Query {
 		} else {
 			// Clear context if custom order is disabled.
 			self::$current_query_context = null;
+
+			// Use menu_order as the default ordering when custom order is disabled.
+			if ( ! isset( $query_vars['orderby'] ) ) {
+				$query_vars['orderby'] = 'menu_order';
+				$query_vars['order']   = 'ASC';
+			}
 		}
 
 		return $query_vars;
@@ -388,8 +394,21 @@ class CPT_Tax_Syncer_Relationship_Query {
 		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $context['taxonomy'];
 		$saved_order    = get_post_meta( $context['parent_post_id'], $order_meta_key, true );
 
-		// If no saved order, return posts as-is.
+		// If no saved order, sort by menu_order and return.
 		if ( ! is_array( $saved_order ) || empty( $saved_order ) ) {
+			// Sort by menu_order as fallback.
+			usort(
+				$posts,
+				function ( $a, $b ) {
+					$order_a = $a->menu_order ?? 0;
+					$order_b = $b->menu_order ?? 0;
+					if ( $order_a === $order_b ) {
+						// If menu_order is the same, sort by post ID for consistency.
+						return $a->ID - $b->ID;
+					}
+					return $order_a - $order_b;
+				}
+			);
 			return $posts;
 		}
 
