@@ -27,6 +27,13 @@ class CPT_Tax_Syncer_Relationship_Query {
 	private static $block_settings_cache = array();
 
 	/**
+	 * Current relationship query context (for posts_results filter)
+	 *
+	 * @var array
+	 */
+	private static $current_query_context = null;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -45,6 +52,9 @@ class CPT_Tax_Syncer_Relationship_Query {
 		// Add post types to JavaScript.
 		add_action( 'wp_enqueue_scripts', array( $this, 'localize_post_types' ) );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_post_types' ) );
+
+		// Filter query results to apply custom order.
+		add_filter( 'posts_results', array( $this, 'apply_custom_order' ), 10, 2 );
 	}
 
 	/**
@@ -76,7 +86,9 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	public function enqueue_block_editor_assets() {
 		// Check if file exists before enqueuing.
-		$script_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'assets/js/relationship-query-variation.js';
+		$script_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/relationship-query-variation.js';
+		$asset_file  = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/relationship-query-variation.asset.php';
+
 		if ( ! file_exists( $script_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'CPT-Tax Syncer: JavaScript file not found at ' . $script_path );
@@ -84,11 +96,27 @@ class CPT_Tax_Syncer_Relationship_Query {
 			return;
 		}
 
+		// Load asset file to get dependencies and version.
+		$asset = array(
+			'dependencies' => array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-hooks', 'wp-compose', 'wp-block-editor', 'wp-components', 'wp-dom-ready' ),
+			'version'      => filemtime( $script_path ),
+		);
+		if ( file_exists( $asset_file ) ) {
+			$loaded_asset = require $asset_file;
+			// Merge dependencies to ensure we have all required ones.
+			if ( isset( $loaded_asset['dependencies'] ) ) {
+				$asset['dependencies'] = array_unique( array_merge( $asset['dependencies'], $loaded_asset['dependencies'] ) );
+			}
+			if ( isset( $loaded_asset['version'] ) ) {
+				$asset['version'] = $loaded_asset['version'];
+			}
+		}
+
 		wp_enqueue_script(
 			'cpt-tax-syncer-relationship-query',
-			CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/relationship-query-variation.js',
-			array( 'wp-blocks', 'wp-element', 'wp-components', 'wp-block-editor', 'wp-hooks', 'wp-compose', 'wp-i18n', 'wp-dom-ready' ),
-			CPT_TAXONOMY_SYNCER_VERSION,
+			CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'build/js/relationship-query-variation.js',
+			$asset['dependencies'],
+			$asset['version'],
 			true
 		);
 
@@ -139,19 +167,21 @@ class CPT_Tax_Syncer_Relationship_Query {
 			return $block_content;
 		}
 
-		// Check if this block has relationship settings
-		// First try our custom settings object.
-		$syncer_settings = $block['attrs']['cptTaxSyncerSettings'] ?? array();
+		// Check if this block has relationship settings in the query object (original way).
+		$query_attrs = $block['attrs']['query'] ?? array();
+		$syncer_settings = array();
 
-		// If not found there, check if they're in the query object (fallback).
+		if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
+			$syncer_settings = array(
+				'useSyncedRelationship' => $query_attrs['useSyncedRelationship'],
+				'targetPostType'        => $query_attrs['targetPostType'] ?? $query_attrs['postType'] ?? '',
+				'useCustomOrder'        => ! empty( $query_attrs['useCustomOrder'] ),
+			);
+		}
+
+		// Fallback: check custom settings object (for backwards compatibility).
 		if ( empty( $syncer_settings['useSyncedRelationship'] ) ) {
-			$query_attrs = $block['attrs']['query'] ?? array();
-			if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
-				$syncer_settings = array(
-					'useSyncedRelationship' => $query_attrs['useSyncedRelationship'],
-					'targetPostType'        => $query_attrs['targetPostType'] ?? $query_attrs['postType'] ?? '',
-				);
-			}
+			$syncer_settings = $block['attrs']['cptTaxSyncerSettings'] ?? array();
 		}
 
 		if ( empty( $syncer_settings['useSyncedRelationship'] ) ) {
@@ -192,19 +222,22 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 * @return array Modified query variables
 	 */
 	public function modify_query_vars( $query_vars, $block, $page ) {
-		// Try to get settings from block attributes first.
-		$syncer_settings = $block->attributes['cptTaxSyncerSettings'] ?? array();
+		// Get settings from query object (original way).
+		$query_attrs = $block->context['query'] ?? $block->attributes['query'] ?? array();
+		$syncer_settings = array();
 
-		// If not found in custom settings, check query object.
+		if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
+			$syncer_settings = array(
+				'useSyncedRelationship' => $query_attrs['useSyncedRelationship'],
+				'relationshipDirection' => $query_attrs['relationshipDirection'] ?? 'posts_from_terms',
+				'targetPostType'        => $query_attrs['targetPostType'] ?? $query_attrs['postType'] ?? '',
+				'useCustomOrder'        => ! empty( $query_attrs['useCustomOrder'] ),
+			);
+		}
+
+		// Fallback: check custom settings object (for backwards compatibility).
 		if ( empty( $syncer_settings['useSyncedRelationship'] ) ) {
-			$query_attrs = $block->context['query'] ?? array();
-			if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
-				$syncer_settings = array(
-					'useSyncedRelationship' => $query_attrs['useSyncedRelationship'],
-					'relationshipDirection' => $query_attrs['relationshipDirection'] ?? 'posts_from_terms',
-					'targetPostType'        => $query_attrs['targetPostType'] ?? $query_attrs['postType'] ?? '',
-				);
-			}
+			$syncer_settings = $block->attributes['cptTaxSyncerSettings'] ?? array();
 		}
 
 		// If still not found, try static cache as last resort fallback.
@@ -222,10 +255,13 @@ class CPT_Tax_Syncer_Relationship_Query {
 			}
 		}
 
-		// Always get the target post type from the query postType.
+		// Always get the target post type and custom order setting from the query postType.
 		if ( ! empty( $syncer_settings['useSyncedRelationship'] ) ) {
 			$query_attrs = $block->context['query'] ?? array();
 			$syncer_settings['targetPostType'] = $query_attrs['postType'] ?? '';
+			if ( isset( $query_attrs['useCustomOrder'] ) ) {
+				$syncer_settings['useCustomOrder'] = ! empty( $query_attrs['useCustomOrder'] );
+			}
 		}
 
 		if ( empty( $syncer_settings['useSyncedRelationship'] ) ) {
@@ -258,7 +294,8 @@ class CPT_Tax_Syncer_Relationship_Query {
 		}
 
 		// Always use posts_from_terms relationship direction.
-		$query_vars = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post );
+		$use_custom_order = ! empty( $syncer_settings['useCustomOrder'] );
+		$query_vars = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post, $use_custom_order );
 
 		return $query_vars;
 	}
@@ -270,9 +307,10 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 * @param array   $pair The CPT-taxonomy pair configuration.
 	 * @param string  $target_post_type The target post type to query.
 	 * @param WP_Post $current_post The current post.
+	 * @param bool    $use_custom_order Whether to use custom order.
 	 * @return array Modified query variables
 	 */
-	private function get_posts_from_terms_query( $query_vars, $pair, $target_post_type, $current_post ) {
+	private function get_posts_from_terms_query( $query_vars, $pair, $target_post_type, $current_post, $use_custom_order = false ) {
 		// Get the term ID associated with the current post.
 		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $pair['taxonomy_slug'];
 		$term_id  = get_post_meta( $current_post->ID, $meta_key, true );
@@ -302,7 +340,84 @@ class CPT_Tax_Syncer_Relationship_Query {
 			$query_vars['post__not_in'] = array( $current_post->ID );
 		}
 
+		// Store context for posts_results filter to apply custom order (only if enabled).
+		if ( $use_custom_order ) {
+			self::$current_query_context = array(
+				'parent_post_id' => $current_post->ID,
+				'taxonomy'       => $pair['taxonomy_slug'],
+			);
+
+			// Remove default ordering to allow custom order to take precedence.
+			// We'll apply the custom order in posts_results filter.
+			if ( ! isset( $query_vars['orderby'] ) || 'menu_order' === $query_vars['orderby'] ) {
+				$query_vars['orderby'] = 'none';
+			}
+		} else {
+			// Clear context if custom order is disabled.
+			self::$current_query_context = null;
+		}
+
 		return $query_vars;
+	}
+
+	/**
+	 * Apply custom order to query results
+	 *
+	 * @param array    $posts The array of post objects.
+	 * @param WP_Query $query The WP_Query instance.
+	 * @return array Reordered posts
+	 */
+	public function apply_custom_order( $posts, $query ) {
+		// Only apply if we have a stored context (from relationship query).
+		if ( ! self::$current_query_context ) {
+			return $posts;
+		}
+
+		// Verify this query matches our context by checking if it has a tax_query.
+		// This prevents applying order to unrelated queries.
+		if ( empty( $query->query_vars['tax_query'] ) ) {
+			// Clear context if query doesn't match.
+			self::$current_query_context = null;
+			return $posts;
+		}
+
+		$context                     = self::$current_query_context;
+		self::$current_query_context = null; // Clear context after use.
+
+		// Get saved order from parent post meta.
+		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $context['taxonomy'];
+		$saved_order    = get_post_meta( $context['parent_post_id'], $order_meta_key, true );
+
+		// If no saved order, return posts as-is.
+		if ( ! is_array( $saved_order ) || empty( $saved_order ) ) {
+			return $posts;
+		}
+
+		// Create a map of post IDs to posts for quick lookup.
+		$posts_map = array();
+		foreach ( $posts as $post ) {
+			$posts_map[ $post->ID ] = $post;
+		}
+
+		// Build ordered array: first by saved order, then append any not in saved order.
+		$ordered_posts   = array();
+		$unordered_posts = array();
+
+		// Add posts in saved order.
+		foreach ( $saved_order as $post_id ) {
+			if ( isset( $posts_map[ $post_id ] ) ) {
+				$ordered_posts[] = $posts_map[ $post_id ];
+				unset( $posts_map[ $post_id ] );
+			}
+		}
+
+		// Add any remaining posts that weren't in the saved order.
+		foreach ( $posts_map as $post ) {
+			$unordered_posts[] = $post;
+		}
+
+		// Combine ordered and unordered posts.
+		return array_merge( $ordered_posts, $unordered_posts );
 	}
 
 

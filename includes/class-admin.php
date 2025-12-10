@@ -134,9 +134,10 @@ class CPT_Tax_Syncer_Admin {
 
 		if ( $is_relationships_page ) {
 			// Check if built file exists (from npm build), otherwise use source.
-			$script_path = 'assets/js/post-type-relationships-dashboard.js';
+			$script_path = 'build/js/post-type-relationships-dashboard.js';
 			$script_url  = CPT_TAXONOMY_SYNCER_PLUGIN_URL . $script_path;
 			$script_file = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . $script_path;
+			$asset_file  = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/post-type-relationships-dashboard.asset.php';
 
 			// If built file doesn't exist, show admin notice.
 			if ( ! file_exists( $script_file ) ) {
@@ -162,21 +163,21 @@ class CPT_Tax_Syncer_Admin {
 				return;
 			}
 
-			// Enqueue WordPress packages.
-			wp_enqueue_script( 'wp-element' );
-			wp_enqueue_script( 'wp-api-fetch' );
-			wp_enqueue_script( 'wp-i18n' );
+			// Load asset file to get dependencies and version.
+			$asset = array(
+				'dependencies' => array( 'wp-element', 'wp-api-fetch', 'wp-i18n' ),
+				'version'      => filemtime( $script_file ),
+			);
+			if ( file_exists( $asset_file ) ) {
+				$asset = require $asset_file;
+			}
 
 			// Enqueue our post type relationships dashboard script.
 			wp_enqueue_script(
 				'cpt-tax-syncer-post-type-relationships',
 				$script_url,
-				array(
-					'wp-element',
-					'wp-api-fetch',
-					'wp-i18n',
-				),
-				filemtime( $script_file ), // Use file modification time for cache busting.
+				$asset['dependencies'],
+				$asset['version'],
 				true
 			);
 

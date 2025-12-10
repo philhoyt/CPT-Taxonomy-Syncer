@@ -2,9 +2,8 @@
 node_modules/
 
 # Build output
-assets/js/build/
+build/
 assets/js/*.min.js
-assets/css/build/
 assets/css/*.min.css
 
 # WordPress

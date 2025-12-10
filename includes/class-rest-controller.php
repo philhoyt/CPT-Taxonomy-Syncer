@@ -235,6 +235,35 @@ class CPT_Tax_Syncer_REST_Controller {
 				),
 			)
 		);
+
+		// Register endpoint to update relationship order.
+		register_rest_route(
+			$namespace,
+			'/relationship-order',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'update_relationship_order' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+				'args'                => array(
+					'parent_post_id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'taxonomy'       => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'order'          => array(
+						'required'          => true,
+						'validate_callback' => function ( $param ) {
+							return is_array( $param );
+						},
+					),
+				),
+			)
+		);
 	}
 
 
@@ -423,6 +452,39 @@ class CPT_Tax_Syncer_REST_Controller {
 					),
 				)
 			);
+
+			// Get saved order for this relationship.
+			$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+			$saved_order    = get_post_meta( $post->ID, $order_meta_key, true );
+			if ( ! is_array( $saved_order ) ) {
+				$saved_order = array();
+			}
+
+			// Create a map of post IDs to posts for quick lookup.
+			$posts_map = array();
+			foreach ( $related_posts as $related_post ) {
+				$posts_map[ $related_post->ID ] = $related_post;
+			}
+
+			// Sort posts: first by saved order, then append any not in saved order.
+			$ordered_posts = array();
+			$unordered_posts = array();
+
+			// Add posts in saved order.
+			foreach ( $saved_order as $post_id ) {
+				if ( isset( $posts_map[ $post_id ] ) ) {
+					$ordered_posts[] = $posts_map[ $post_id ];
+					unset( $posts_map[ $post_id ] );
+				}
+			}
+
+			// Add any remaining posts that weren't in the saved order.
+			foreach ( $posts_map as $related_post ) {
+				$unordered_posts[] = $related_post;
+			}
+
+			// Combine ordered and unordered posts
+			$related_posts = array_merge( $ordered_posts, $unordered_posts );
 
 			$related_posts_data = array();
 			foreach ( $related_posts as $related_post ) {
@@ -1006,6 +1068,63 @@ class CPT_Tax_Syncer_REST_Controller {
 			'link'        => get_term_link( $term ),
 			'count'       => $term->count,
 			'description' => $term->description,
+		);
+	}
+
+	/**
+	 * Update relationship order
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public static function update_relationship_order( $request ) {
+		$parent_post_id = $request->get_param( 'parent_post_id' );
+		$taxonomy       = $request->get_param( 'taxonomy' );
+		$order          = $request->get_param( 'order' );
+
+		// Validate parent post exists.
+		$parent_post = get_post( $parent_post_id );
+		if ( ! $parent_post ) {
+			return new WP_Error(
+				'invalid_parent_post',
+				__( 'Parent post not found.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		// Validate taxonomy exists.
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'invalid_taxonomy',
+				__( 'Invalid taxonomy.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Validate order is an array of integers.
+		if ( ! is_array( $order ) ) {
+			return new WP_Error(
+				'invalid_order',
+				__( 'Order must be an array of post IDs.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Sanitize order array (ensure all values are integers).
+		$order = array_map( 'absint', $order );
+		$order = array_filter( $order ); // Remove any zeros.
+
+		// Save order to parent post meta.
+		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+		update_post_meta( $parent_post_id, $order_meta_key, $order );
+
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'message' => __( 'Relationship order updated successfully.', 'cpt-taxonomy-syncer' ),
+				'order'   => $order,
+			),
+			200
 		);
 	}
 
