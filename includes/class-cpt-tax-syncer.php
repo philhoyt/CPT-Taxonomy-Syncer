@@ -235,6 +235,23 @@ class CPT_Taxonomy_Syncer {
 			return;
 		}
 
+		/**
+		 * Allow plugins to prevent or modify post-to-term sync.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param bool    $should_sync Whether to proceed with sync. Default true.
+		 * @param int     $post_id     The post ID.
+		 * @param WP_Post $post        The post object.
+		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param string  $taxonomy_slug The taxonomy slug.
+		 */
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_post_to_term', true, $post_id, $post, $this->cpt_slug, $this->taxonomy_slug );
+
+		if ( ! $should_sync ) {
+			return;
+		}
+
 		// Check if this post is already linked to a term.
 		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
 		$linked_term_id = get_post_meta( $post_id, $meta_key, true );
@@ -313,6 +330,20 @@ class CPT_Taxonomy_Syncer {
 				update_post_meta( $post_id, $meta_key, $term->term_id );
 			}
 		}
+
+		/**
+		 * Fires after a post has been synced to a term.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param int     $post_id     The post ID.
+		 * @param WP_Post $post        The post object.
+		 * @param int     $term_id     The term ID that was linked (or null if sync failed).
+		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param string  $taxonomy_slug The taxonomy slug.
+		 */
+		$final_term_id = get_post_meta( $post_id, $meta_key, true );
+		do_action( 'cpt_tax_syncer_after_sync_post_to_term', $post_id, $post, $final_term_id, $this->cpt_slug, $this->taxonomy_slug );
 	}
 
 	/**
@@ -335,6 +366,23 @@ class CPT_Taxonomy_Syncer {
 
 		// Also check if there's a post currently creating a term with this name.
 		$term = get_term( $term_id, $this->taxonomy_slug );
+
+		/**
+		 * Allow plugins to prevent or modify term-to-post sync.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param bool    $should_sync Whether to proceed with sync. Default true.
+		 * @param int     $term_id     The term ID.
+		 * @param WP_Term $term        The term object.
+		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param string  $taxonomy_slug The taxonomy slug.
+		 */
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_term_to_post', true, $term_id, $term, $this->cpt_slug, $this->taxonomy_slug );
+
+		if ( ! $should_sync ) {
+			return;
+		}
 		if ( $term && ! is_wp_error( $term ) ) {
 			foreach ( self::$posts_creating_terms as $creating_post_id => $creating_term_name ) {
 				if ( $creating_term_name === $term->name ) {
@@ -391,6 +439,20 @@ class CPT_Taxonomy_Syncer {
 			update_post_meta( $existing_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
 			update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $existing_post_id );
 		}
+
+		/**
+		 * Fires after a term has been synced to a post.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param int     $term_id     The term ID.
+		 * @param WP_Term $term        The term object.
+		 * @param int     $post_id     The post ID that was linked (or null if sync failed).
+		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param string  $taxonomy_slug The taxonomy slug.
+		 */
+		$final_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
+		do_action( 'cpt_tax_syncer_after_sync_term_to_post', $term_id, $term, $final_post_id, $this->cpt_slug, $this->taxonomy_slug );
 	}
 
 	/**

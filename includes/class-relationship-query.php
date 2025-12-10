@@ -334,6 +334,18 @@ class CPT_Tax_Syncer_Relationship_Query {
 		$use_custom_order = ! empty( $syncer_settings['useCustomOrder'] );
 		$query_vars       = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post, $use_custom_order );
 
+		/**
+		 * Filter query vars for relationship queries.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param array   $query_vars      The query variables.
+		 * @param array   $syncer_settings The syncer settings from block attributes.
+		 * @param array   $current_pair    The CPT-taxonomy pair configuration.
+		 * @param WP_Post $post            The current post object.
+		 */
+		$query_vars = apply_filters( 'cpt_tax_syncer_query_vars', $query_vars, $syncer_settings, $current_pair, $post );
+
 		return $query_vars;
 	}
 

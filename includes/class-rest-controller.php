@@ -1468,6 +1468,17 @@ class CPT_Tax_Syncer_REST_Controller {
 		$order = array_map( 'absint', $order );
 		$order = array_filter( $order ); // Remove any zeros.
 
+		/**
+		 * Filter the relationship order before saving.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param array  $order          The order array of post IDs.
+		 * @param int    $parent_post_id The parent post ID.
+		 * @param string $taxonomy       The taxonomy slug.
+		 */
+		$order = apply_filters( 'cpt_tax_syncer_relationship_order', $order, $parent_post_id, $taxonomy );
+
 		// Save order to parent post meta.
 		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
 		update_post_meta( $parent_post_id, $order_meta_key, $order );
