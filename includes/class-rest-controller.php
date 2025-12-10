@@ -310,21 +310,98 @@ class CPT_Tax_Syncer_REST_Controller {
 					'post_type'      => $cpt_slug,
 					'posts_per_page' => -1,
 					'post_status'    => 'any',
+					'fields'         => 'ids', // Only get IDs for performance.
 				)
 			);
 
+			if ( empty( $posts ) ) {
+				continue;
+			}
+
 			$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy_slug;
 
-			foreach ( $posts as $post ) {
-				$term_id = get_post_meta( $post->ID, $meta_key, true );
+			// Bulk fetch all meta values (1 query instead of N).
+			global $wpdb;
+			if ( empty( $posts ) ) {
+				continue;
+			}
 
-				if ( ! $term_id ) {
+			// Build placeholders for IN clause.
+			$placeholders = implode( ',', array_fill( 0, count( $posts ), '%d' ) );
+			$query        = "SELECT post_id, meta_value 
+				FROM {$wpdb->postmeta} 
+				WHERE post_id IN ($placeholders) 
+				AND meta_key = %s";
+
+			// Prepare query with post IDs and meta key.
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+			$prepared     = $wpdb->prepare( $query, array_merge( $posts, array( $meta_key ) ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+			$meta_values  = $wpdb->get_results( $prepared, ARRAY_A );
+
+			// Build lookup array: post_id => term_id.
+			$post_to_term_map = array();
+			$term_ids         = array();
+			foreach ( $meta_values as $meta_row ) {
+				$term_id = (int) $meta_row['meta_value'];
+				if ( $term_id > 0 ) {
+					$post_to_term_map[ (int) $meta_row['post_id'] ] = $term_id;
+					$term_ids[]                                      = $term_id;
+				}
+			}
+
+			if ( empty( $term_ids ) ) {
+				continue;
+			}
+
+			// Bulk fetch all terms (1 query instead of N).
+			$terms = get_terms(
+				array(
+					'taxonomy'   => $taxonomy_slug,
+					'include'    => array_unique( $term_ids ),
+					'hide_empty' => false,
+				)
+			);
+
+			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+
+			// Build lookup array: term_id => term object.
+			$terms_map = array();
+			foreach ( $terms as $term ) {
+				$terms_map[ $term->term_id ] = $term;
+			}
+
+			// Get full post objects only for posts that have valid terms.
+			$valid_post_ids = array_keys( $post_to_term_map );
+			$full_posts     = get_posts(
+				array(
+					'post_type'      => $cpt_slug,
+					'post__in'       => $valid_post_ids,
+					'posts_per_page' => -1,
+					'post_status'    => 'any',
+					'orderby'        => 'post__in', // Preserve order.
+				)
+			);
+
+			// Build lookup array: post_id => post object.
+			$posts_map = array();
+			foreach ( $full_posts as $post ) {
+				$posts_map[ $post->ID ] = $post;
+			}
+
+			// Now build relationships using lookup arrays (no queries in loop).
+			foreach ( $valid_post_ids as $post_id ) {
+				$post = isset( $posts_map[ $post_id ] ) ? $posts_map[ $post_id ] : null;
+				if ( ! $post ) {
 					continue;
 				}
 
-				$term = get_term( $term_id, $taxonomy_slug );
+				$term_id = $post_to_term_map[ $post_id ];
+				$term    = isset( $terms_map[ $term_id ] ) ? $terms_map[ $term_id ] : null;
 
-				if ( ! $term || is_wp_error( $term ) ) {
+				if ( ! $term ) {
 					continue;
 				}
 
@@ -422,42 +499,182 @@ class CPT_Tax_Syncer_REST_Controller {
 
 		$posts = get_posts( $query_args );
 
-		$relationships = array();
+		if ( empty( $posts ) ) {
+			return new WP_REST_Response(
+				array(
+					'relationships' => array(),
+					'total'         => 0,
+					'pages'         => 0,
+					'page'          => $page,
+					'per_page'      => $per_page,
+				),
+				200
+			);
+		}
 
-		foreach ( $posts as $post ) {
-			$term_id = get_post_meta( $post->ID, $meta_key, true );
+		$post_ids = wp_list_pluck( $posts, 'ID' );
 
-			if ( ! $term_id ) {
-				continue;
+		// Bulk fetch all meta values (1 query instead of N).
+		global $wpdb;
+
+		// Build placeholders for IN clause.
+		$placeholders   = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+
+		// Get term IDs and order meta in one query.
+		$query = "SELECT post_id, meta_key, meta_value 
+			FROM {$wpdb->postmeta} 
+			WHERE post_id IN ($placeholders) 
+			AND (meta_key = %s OR meta_key = %s)";
+
+		// Prepare query with post IDs and meta keys.
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+		$prepared     = $wpdb->prepare(
+			$query,
+			array_merge(
+				$post_ids,
+				array(
+					$meta_key,
+					$order_meta_key,
+				)
+			)
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+		$meta_values  = $wpdb->get_results( $prepared, ARRAY_A );
+
+		// Build lookup arrays: post_id => term_id, post_id => order array.
+		$post_to_term_map  = array();
+		$post_to_order_map = array();
+		$term_ids          = array();
+
+		foreach ( $meta_values as $meta_row ) {
+			$post_id = (int) $meta_row['post_id'];
+			if ( $meta_row['meta_key'] === $meta_key ) {
+				$term_id = (int) $meta_row['meta_value'];
+				if ( $term_id > 0 ) {
+					$post_to_term_map[ $post_id ] = $term_id;
+					$term_ids[]                    = $term_id;
+				}
+			} elseif ( $meta_row['meta_key'] === $order_meta_key ) {
+				$order = maybe_unserialize( $meta_row['meta_value'] );
+				if ( is_array( $order ) ) {
+					$post_to_order_map[ $post_id ] = $order;
+				}
 			}
+		}
 
-			$term = get_term( $term_id, $taxonomy );
-			if ( ! $term || is_wp_error( $term ) ) {
-				continue;
+		// Bulk fetch all terms (1 query instead of N).
+		$terms_map      = array();
+		$unique_term_ids = array();
+		if ( ! empty( $term_ids ) ) {
+			$unique_term_ids = array_unique( $term_ids );
+			$terms           = get_terms(
+				array(
+					'taxonomy'   => $taxonomy,
+					'include'    => $unique_term_ids,
+					'hide_empty' => false,
+				)
+			);
+
+			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+				foreach ( $terms as $term ) {
+					$terms_map[ $term->term_id ] = $term;
+				}
 			}
+		}
 
-			// Get all posts that share this taxonomy term (excluding the current post).
-			$related_posts = get_posts(
+		// Bulk fetch all related posts for all terms (1 query instead of N).
+		// Get all posts that have any of the terms we're interested in.
+		$all_related_posts = array();
+		$term_to_posts_map = array();
+
+		if ( ! empty( $unique_term_ids ) ) {
+			$all_related_posts = get_posts(
 				array(
 					'post_type'      => 'any',
 					'posts_per_page' => -1,
 					'post_status'    => 'any',
-					'post__not_in'   => array( $post->ID ),
 					'orderby'        => 'menu_order',
 					'order'          => 'ASC',
 					'tax_query'      => array(
 						array(
 							'taxonomy' => $taxonomy,
 							'field'    => 'term_id',
-							'terms'    => $term_id,
+							'terms'    => $unique_term_ids,
 						),
 					),
 				)
 			);
 
+			// Bulk fetch term relationships for all related posts (1 query instead of N).
+			if ( ! empty( $all_related_posts ) ) {
+				$related_post_ids = wp_list_pluck( $all_related_posts, 'ID' );
+
+				// Build placeholders for IN clause.
+				$related_placeholders = implode( ',', array_fill( 0, count( $related_post_ids ), '%d' ) );
+				$term_placeholders    = implode( ',', array_fill( 0, count( $unique_term_ids ), '%d' ) );
+
+				// Query term relationships in bulk.
+				$term_rel_query = "SELECT tr.object_id, tt.term_id 
+					FROM {$wpdb->term_relationships} tr
+					INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+					WHERE tr.object_id IN ($related_placeholders)
+					AND tt.taxonomy = %s
+					AND tt.term_id IN ($term_placeholders)";
+
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+				$term_rel_prepared  = $wpdb->prepare(
+					$term_rel_query,
+					array_merge( $related_post_ids, array( $taxonomy ), $unique_term_ids )
+				);
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+				$term_relationships = $wpdb->get_results( $term_rel_prepared, ARRAY_A );
+
+				// Build lookup: term_id => array of posts.
+				$related_posts_by_id = array();
+				foreach ( $all_related_posts as $related_post ) {
+					$related_posts_by_id[ $related_post->ID ] = $related_post;
+				}
+
+				foreach ( $term_relationships as $rel ) {
+					$post_id     = (int) $rel['object_id'];
+					$rel_term_id = (int) $rel['term_id'];
+
+					if ( ! isset( $term_to_posts_map[ $rel_term_id ] ) ) {
+						$term_to_posts_map[ $rel_term_id ] = array();
+					}
+
+					if ( isset( $related_posts_by_id[ $post_id ] ) ) {
+						$term_to_posts_map[ $rel_term_id ][ $post_id ] = $related_posts_by_id[ $post_id ];
+					}
+				}
+			}
+		}
+
+		$relationships = array();
+
+		// Now build relationships using lookup arrays (no queries in loop).
+		foreach ( $posts as $post ) {
+			$term_id = isset( $post_to_term_map[ $post->ID ] ) ? $post_to_term_map[ $post->ID ] : null;
+
+			if ( ! $term_id ) {
+				continue;
+			}
+
+			$term = isset( $terms_map[ $term_id ] ) ? $terms_map[ $term_id ] : null;
+			if ( ! $term ) {
+				continue;
+			}
+
+			// Get related posts from lookup map (already filtered and ordered).
+			$related_posts = isset( $term_to_posts_map[ $term_id ] ) ? $term_to_posts_map[ $term_id ] : array();
+
+			// Exclude the current post from related posts.
+			unset( $related_posts[ $post->ID ] );
+
 			// Get saved order for this relationship.
 			$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
-			$saved_order    = get_post_meta( $post->ID, $order_meta_key, true );
+			$saved_order    = isset( $post_to_order_map[ $post->ID ] ) ? $post_to_order_map[ $post->ID ] : array();
 			if ( ! is_array( $saved_order ) ) {
 				$saved_order = array();
 			}
