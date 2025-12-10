@@ -175,7 +175,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 		}
 
 		// Check if this block has relationship settings in the query object (original way).
-		$query_attrs = $block['attrs']['query'] ?? array();
+		$query_attrs     = $block['attrs']['query'] ?? array();
 		$syncer_settings = array();
 
 		if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
@@ -251,7 +251,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	public function modify_query_vars( $query_vars, $block, $page ) {
 		// Get settings from query object (original way).
-		$query_attrs = $block->context['query'] ?? $block->attributes['query'] ?? array();
+		$query_attrs     = $block->context['query'] ?? $block->attributes['query'] ?? array();
 		$syncer_settings = array();
 
 		if ( ! empty( $query_attrs['useSyncedRelationship'] ) ) {
@@ -287,14 +287,14 @@ class CPT_Tax_Syncer_Relationship_Query {
 			} elseif ( ! empty( self::$block_settings_cache ) ) {
 				// Fallback: use most recent cache entry if block ID not available.
 				// This is not ideal but better than a global variable.
-				$most_recent = end( self::$block_settings_cache );
+				$most_recent     = end( self::$block_settings_cache );
 				$syncer_settings = isset( $most_recent['settings'] ) ? $most_recent['settings'] : $most_recent;
 			}
 		}
 
 		// Always get the target post type and custom order setting from the query postType.
 		if ( ! empty( $syncer_settings['useSyncedRelationship'] ) ) {
-			$query_attrs = $block->context['query'] ?? array();
+			$query_attrs                       = $block->context['query'] ?? array();
 			$syncer_settings['targetPostType'] = $query_attrs['postType'] ?? '';
 			if ( isset( $query_attrs['useCustomOrder'] ) ) {
 				$syncer_settings['useCustomOrder'] = ! empty( $query_attrs['useCustomOrder'] );
@@ -332,7 +332,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		// Always use posts_from_terms relationship direction.
 		$use_custom_order = ! empty( $syncer_settings['useCustomOrder'] );
-		$query_vars = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post, $use_custom_order );
+		$query_vars       = $this->get_posts_from_terms_query( $query_vars, $current_pair, $target_post_type, $post, $use_custom_order );
 
 		return $query_vars;
 	}

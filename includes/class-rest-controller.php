@@ -260,18 +260,18 @@ class CPT_Tax_Syncer_REST_Controller {
 					return current_user_can( 'manage_options' );
 				},
 				'args'                => array(
-					'page'     => array(
+					'page'          => array(
 						'default'           => 1,
 						'sanitize_callback' => 'absint',
 					),
-					'per_page' => array(
+					'per_page'      => array(
 						'default'           => 20,
 						'sanitize_callback' => 'absint',
 					),
-					'search'   => array(
+					'search'        => array(
 						'sanitize_callback' => 'sanitize_text_field',
 					),
-					'cpt_slug' => array(
+					'cpt_slug'      => array(
 						'sanitize_callback' => 'sanitize_text_field',
 					),
 					'taxonomy_slug' => array(
@@ -373,11 +373,11 @@ class CPT_Tax_Syncer_REST_Controller {
 		$per_page        = $request->get_param( 'per_page' );
 
 		$cache_params = array(
-			'search'          => $search,
-			'cpt_slug'        => $cpt_filter,
-			'taxonomy_slug'   => $taxonomy_filter,
-			'page'            => $page,
-			'per_page'        => $per_page,
+			'search'        => $search,
+			'cpt_slug'      => $cpt_filter,
+			'taxonomy_slug' => $taxonomy_filter,
+			'page'          => $page,
+			'per_page'      => $per_page,
 		);
 		$cache_key    = self::get_cache_key( 'get_all_relationships', $cache_params );
 
@@ -433,9 +433,9 @@ class CPT_Tax_Syncer_REST_Controller {
 
 			// Prepare query with post IDs and meta key.
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
-			$prepared     = $wpdb->prepare( $query, array_merge( $posts, array( $meta_key ) ) );
+			$prepared = $wpdb->prepare( $query, array_merge( $posts, array( $meta_key ) ) );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
-			$meta_values  = $wpdb->get_results( $prepared, ARRAY_A );
+			$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
 
 			// Build lookup array: post_id => term_id.
 			$post_to_term_map = array();
@@ -444,7 +444,7 @@ class CPT_Tax_Syncer_REST_Controller {
 				$term_id = (int) $meta_row['meta_value'];
 				if ( $term_id > 0 ) {
 					$post_to_term_map[ (int) $meta_row['post_id'] ] = $term_id;
-					$term_ids[]                                      = $term_id;
+					$term_ids[]                                     = $term_id;
 				}
 			}
 
@@ -648,7 +648,7 @@ class CPT_Tax_Syncer_REST_Controller {
 
 		// Prepare query with post IDs and meta keys.
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
-		$prepared     = $wpdb->prepare(
+		$prepared = $wpdb->prepare(
 			$query,
 			array_merge(
 				$post_ids,
@@ -659,7 +659,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			)
 		);
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
-		$meta_values  = $wpdb->get_results( $prepared, ARRAY_A );
+		$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
 
 		// Build lookup arrays: post_id => term_id, post_id => order array.
 		$post_to_term_map  = array();
@@ -672,7 +672,7 @@ class CPT_Tax_Syncer_REST_Controller {
 				$term_id = (int) $meta_row['meta_value'];
 				if ( $term_id > 0 ) {
 					$post_to_term_map[ $post_id ] = $term_id;
-					$term_ids[]                    = $term_id;
+					$term_ids[]                   = $term_id;
 				}
 			} elseif ( $meta_row['meta_key'] === $order_meta_key ) {
 				$order = maybe_unserialize( $meta_row['meta_value'] );
@@ -683,7 +683,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		}
 
 		// Bulk fetch all terms (1 query instead of N).
-		$terms_map      = array();
+		$terms_map       = array();
 		$unique_term_ids = array();
 		if ( ! empty( $term_ids ) ) {
 			$unique_term_ids = array_unique( $term_ids );
@@ -742,7 +742,7 @@ class CPT_Tax_Syncer_REST_Controller {
 					AND tt.term_id IN ($term_placeholders)";
 
 				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
-				$term_rel_prepared  = $wpdb->prepare(
+				$term_rel_prepared = $wpdb->prepare(
 					$term_rel_query,
 					array_merge( $related_post_ids, array( $taxonomy ), $unique_term_ids )
 				);
@@ -805,7 +805,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			}
 
 			// Sort posts: first by saved order, then append any not in saved order.
-			$ordered_posts = array();
+			$ordered_posts   = array();
 			$unordered_posts = array();
 
 			// Add posts in saved order.
@@ -851,7 +851,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			}
 
 			$relationships[] = array(
-				'post'           => array(
+				'post'          => array(
 					'id'          => $post->ID,
 					'title'       => $post->post_title,
 					'post_type'   => $post->post_type,
@@ -859,19 +859,19 @@ class CPT_Tax_Syncer_REST_Controller {
 					'edit_url'    => get_edit_post_link( $post->ID, 'raw' ),
 					'view_url'    => get_permalink( $post->ID ),
 				),
-				'term'           => array(
+				'term'          => array(
 					'id'   => $term_id,
 					'name' => $term->name,
 					'slug' => $term->slug,
 				),
-				'related_posts'  => $related_posts_data,
-				'related_count'  => count( $related_posts_data ),
+				'related_posts' => $related_posts_data,
+				'related_count' => count( $related_posts_data ),
 			);
 		}
 
 		// Pagination.
-		$total = count( $relationships );
-		$pages = ceil( $total / $per_page );
+		$total  = count( $relationships );
+		$pages  = ceil( $total / $per_page );
 		$offset = ( $page - 1 ) * $per_page;
 
 		$paginated_relationships = array_slice( $relationships, $offset, $per_page );
