@@ -601,14 +601,43 @@ class CPT_Tax_Syncer_Admin {
 					</p>
 					<p style="margin: 0; font-family: monospace; font-size: 12px;">
 						<strong><?php esc_html_e( 'Term Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code><?php echo esc_html( $meta_key ); ?></code><br><br>
+						<code><?php echo esc_html( $meta_key ); ?></code>
+						<?php
+						$term_meta_value = get_term_meta( $term->term_id, $meta_key, true );
+						if ( $term_meta_value ) {
+							echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' ' . esc_html( $term_meta_value ) . ')</span>';
+						}
+						?>
+						<br><br>
 						<strong><?php esc_html_e( 'Post Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code><br><br>
-						<strong><?php esc_html_e( 'Custom Order Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code><?php echo esc_html( '_cpt_tax_syncer_relationship_order_' . $taxonomy ); ?></code>
 						<span class="description" style="display: block; margin-top: 4px; font-size: 11px; color: #646970;">
 							<?php esc_html_e( 'Stored on the parent post (CPT) to define custom order of related posts.', 'cpt-taxonomy-syncer' ); ?>
 						</span>
+						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code>
+						<?php
+						if ( $linked_post_id ) {
+							$post_meta_value = get_post_meta( $linked_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy, true );
+							if ( $post_meta_value ) {
+								echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' ' . esc_html( $post_meta_value ) . ')</span>';
+							}
+						}
+						?>
+						<br><br>
+						<strong><?php esc_html_e( 'Custom Order Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
+						<span class="description" style="display: block; margin-top: 4px; font-size: 11px; color: #646970;">
+							<?php esc_html_e( 'Stored on the parent post (CPT) to define custom order of related posts.', 'cpt-taxonomy-syncer' ); ?>
+						</span>
+						<code><?php echo esc_html( '_cpt_tax_syncer_relationship_order_' . $taxonomy ); ?></code>
+						<?php
+						if ( $linked_post_id ) {
+							$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+							$order_value    = get_post_meta( $linked_post_id, $order_meta_key, true );
+							if ( $order_value && is_array( $order_value ) ) {
+								echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' [' . esc_html( implode( ', ', $order_value ) ) . '])</span>';
+							}
+						}
+						?>
+						
 					</p>
 				</div>
 			</td>
