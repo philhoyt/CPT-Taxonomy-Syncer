@@ -603,7 +603,12 @@ class CPT_Tax_Syncer_Admin {
 						<strong><?php esc_html_e( 'Term Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
 						<code><?php echo esc_html( $meta_key ); ?></code><br><br>
 						<strong><?php esc_html_e( 'Post Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code>
+						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code><br><br>
+						<strong><?php esc_html_e( 'Custom Order Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
+						<code><?php echo esc_html( '_cpt_tax_syncer_relationship_order_' . $taxonomy ); ?></code>
+						<span class="description" style="display: block; margin-top: 4px; font-size: 11px; color: #646970;">
+							<?php esc_html_e( 'Stored on the parent post (CPT) to define custom order of related posts.', 'cpt-taxonomy-syncer' ); ?>
+						</span>
 					</p>
 				</div>
 			</td>
