@@ -22,9 +22,16 @@ class CPT_Tax_Syncer_Relationship_Query {
 	/**
 	 * Static storage for block settings (used as fallback when block attributes aren't available)
 	 *
-	 * @var array Keyed by block ID to avoid conflicts
+	 * @var array Keyed by block ID to avoid conflicts, with timestamps for TTL
 	 */
 	private static $block_settings_cache = array();
+
+	/**
+	 * Cache TTL for block settings (5 minutes).
+	 *
+	 * @var int
+	 */
+	private static $cache_ttl = 5 * MINUTE_IN_SECONDS;
 
 	/**
 	 * Current relationship query context (for posts_results filter)
@@ -190,12 +197,33 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		// Store the settings in static cache (keyed by block ID if available) as fallback.
 		// This is only used if block attributes aren't available in modify_query_vars.
-		$block_id                                = $block['attrs']['id'] ?? $block['attrs']['anchor'] ?? uniqid( 'block_', true );
-		self::$block_settings_cache[ $block_id ] = $syncer_settings;
+		$block_id = $block['attrs']['id'] ?? $block['attrs']['anchor'] ?? uniqid( 'block_', true );
 
-		// Clean up old cache entries to prevent memory leaks (keep only last 10).
+		// Store with timestamp for TTL-based expiration.
+		self::$block_settings_cache[ $block_id ] = array(
+			'settings'  => $syncer_settings,
+			'timestamp' => time(),
+		);
+
+		// Clean up expired and old cache entries.
+		$current_time = time();
+		foreach ( self::$block_settings_cache as $key => $cache_entry ) {
+			// Remove expired entries (older than TTL).
+			if ( isset( $cache_entry['timestamp'] ) && ( $current_time - $cache_entry['timestamp'] ) > self::$cache_ttl ) {
+				unset( self::$block_settings_cache[ $key ] );
+			}
+		}
+
+		// If still too many entries, keep only the most recent 10.
 		if ( count( self::$block_settings_cache ) > 10 ) {
-			self::$block_settings_cache = array_slice( self::$block_settings_cache, -10, 10, true );
+			// Sort by timestamp (newest first).
+			uasort(
+				self::$block_settings_cache,
+				function ( $a, $b ) {
+					return ( $b['timestamp'] ?? 0 ) - ( $a['timestamp'] ?? 0 );
+				}
+			);
+			self::$block_settings_cache = array_slice( self::$block_settings_cache, 0, 10, true );
 		}
 
 		return $block_content;
@@ -247,11 +275,20 @@ class CPT_Tax_Syncer_Relationship_Query {
 			$block_id = $block->attributes['id'] ?? $block->attributes['anchor'] ?? null;
 
 			if ( $block_id && isset( self::$block_settings_cache[ $block_id ] ) ) {
-				$syncer_settings = self::$block_settings_cache[ $block_id ];
+				$cache_entry = self::$block_settings_cache[ $block_id ];
+				// Check if cache entry is expired.
+				if ( isset( $cache_entry['timestamp'] ) && ( time() - $cache_entry['timestamp'] ) > self::$cache_ttl ) {
+					// Cache expired, remove it.
+					unset( self::$block_settings_cache[ $block_id ] );
+					$syncer_settings = array();
+				} else {
+					$syncer_settings = $cache_entry['settings'] ?? array();
+				}
 			} elseif ( ! empty( self::$block_settings_cache ) ) {
 				// Fallback: use most recent cache entry if block ID not available.
 				// This is not ideal but better than a global variable.
-				$syncer_settings = end( self::$block_settings_cache );
+				$most_recent = end( self::$block_settings_cache );
+				$syncer_settings = isset( $most_recent['settings'] ) ? $most_recent['settings'] : $most_recent;
 			}
 		}
 

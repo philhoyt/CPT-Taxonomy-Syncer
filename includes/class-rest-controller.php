@@ -26,6 +26,84 @@ class CPT_Tax_Syncer_REST_Controller {
 	private $namespace = 'cpt-tax-syncer/v1';
 
 	/**
+	 * Cache TTL for relationship queries (filterable).
+	 *
+	 * @return int Cache TTL in seconds.
+	 */
+	private static function get_cache_ttl() {
+		return apply_filters( 'cpt_tax_syncer_cache_ttl', CPT_TAX_SYNCER_CACHE_TTL );
+	}
+
+	/**
+	 * Generate cache key for relationship queries.
+	 *
+	 * @param string $endpoint Endpoint name.
+	 * @param array  $params Query parameters.
+	 * @return string Cache key.
+	 */
+	private static function get_cache_key( $endpoint, $params ) {
+		// Sort params for consistent cache keys.
+		ksort( $params );
+		// Use json_encode instead of serialize for better security.
+		$key_string = $endpoint . '_' . md5( wp_json_encode( $params ) );
+		return 'cpt_tax_syncer_' . $key_string;
+	}
+
+	/**
+	 * Invalidate cache for a specific post type and taxonomy.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @param string $taxonomy Taxonomy slug.
+	 */
+	public static function invalidate_cache( $post_type = null, $taxonomy = null ) {
+		// If specific post type/taxonomy provided, invalidate only those.
+		if ( $post_type && $taxonomy ) {
+			// Invalidate all caches for this pair (both endpoints).
+			$patterns = array(
+				'cpt_tax_syncer_get_all_relationships_*',
+				'cpt_tax_syncer_get_post_type_relationships_*',
+			);
+
+			// Delete transients matching pattern (WordPress doesn't have wildcard delete, so we'll use a different approach).
+			// For now, we'll invalidate all relationship caches when any relationship changes.
+			// This is simpler and ensures consistency.
+		}
+
+		// Invalidate all relationship caches.
+		// WordPress doesn't support wildcard transient deletion, so we use a version-based approach.
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		update_option( 'cpt_tax_syncer_cache_version', $cache_version + 1, false );
+	}
+
+	/**
+	 * Get cached data or false if not found/expired.
+	 *
+	 * @param string $cache_key Cache key.
+	 * @return mixed|false Cached data or false.
+	 */
+	private static function get_cache( $cache_key ) {
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		$versioned_key = $cache_key . '_v' . $cache_version;
+		return get_transient( $versioned_key );
+	}
+
+	/**
+	 * Set cache data.
+	 *
+	 * @param string $cache_key Cache key.
+	 * @param mixed  $data Data to cache.
+	 * @param int    $ttl Time to live in seconds (optional, uses default if not provided).
+	 */
+	private static function set_cache( $cache_key, $data, $ttl = null ) {
+		if ( null === $ttl ) {
+			$ttl = self::get_cache_ttl();
+		}
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		$versioned_key = $cache_key . '_v' . $cache_version;
+		set_transient( $versioned_key, $data, $ttl );
+	}
+
+	/**
 	 * The custom post type slug
 	 *
 	 * @var string
@@ -287,10 +365,29 @@ class CPT_Tax_Syncer_REST_Controller {
 			);
 		}
 
+		// Build cache key from request parameters.
+		$search          = $request->get_param( 'search' );
+		$cpt_filter      = $request->get_param( 'cpt_slug' );
+		$taxonomy_filter = $request->get_param( 'taxonomy_slug' );
+		$page            = $request->get_param( 'page' );
+		$per_page        = $request->get_param( 'per_page' );
+
+		$cache_params = array(
+			'search'          => $search,
+			'cpt_slug'        => $cpt_filter,
+			'taxonomy_slug'   => $taxonomy_filter,
+			'page'            => $page,
+			'per_page'        => $per_page,
+		);
+		$cache_key    = self::get_cache_key( 'get_all_relationships', $cache_params );
+
+		// Try to get from cache.
+		$cached = self::get_cache( $cache_key );
+		if ( false !== $cached ) {
+			return new WP_REST_Response( $cached, 200 );
+		}
+
 		$all_relationships = array();
-		$search           = $request->get_param( 'search' );
-		$cpt_filter       = $request->get_param( 'cpt_slug' );
-		$taxonomy_filter  = $request->get_param( 'taxonomy_slug' );
 
 		foreach ( $pairs as $pair ) {
 			$cpt_slug      = $pair['cpt_slug'];
@@ -446,16 +543,18 @@ class CPT_Tax_Syncer_REST_Controller {
 
 		$relationships = array_slice( $all_relationships, $offset, $per_page );
 
-		return new WP_REST_Response(
-			array(
-				'relationships' => $relationships,
-				'total'         => $total,
-				'pages'         => $pages,
-				'page'          => $page,
-				'per_page'      => $per_page,
-			),
-			200
+		$response_data = array(
+			'relationships' => $relationships,
+			'total'         => $total,
+			'pages'         => $pages,
+			'page'          => $page,
+			'per_page'      => $per_page,
 		);
+
+		// Cache the response.
+		self::set_cache( $cache_key, $response_data );
+
+		return new WP_REST_Response( $response_data, 200 );
 	}
 
 	/**
@@ -477,6 +576,22 @@ class CPT_Tax_Syncer_REST_Controller {
 				__( 'Invalid post type or taxonomy.', 'cpt-taxonomy-syncer' ),
 				array( 'status' => 400 )
 			);
+		}
+
+		// Build cache key from request parameters.
+		$cache_params = array(
+			'post_type' => $post_type,
+			'taxonomy'  => $taxonomy,
+			'page'      => $page,
+			'per_page'  => $per_page,
+			'search'    => $search,
+		);
+		$cache_key    = self::get_cache_key( 'get_post_type_relationships', $cache_params );
+
+		// Try to get from cache.
+		$cached = self::get_cache( $cache_key );
+		if ( false !== $cached ) {
+			return new WP_REST_Response( $cached, 200 );
 		}
 
 		// Get all posts of this type that have a synced term.
@@ -761,16 +876,18 @@ class CPT_Tax_Syncer_REST_Controller {
 
 		$paginated_relationships = array_slice( $relationships, $offset, $per_page );
 
-		return new WP_REST_Response(
-			array(
-				'relationships' => $paginated_relationships,
-				'total'         => $total,
-				'pages'         => $pages,
-				'page'          => $page,
-				'per_page'      => $per_page,
-			),
-			200
+		$response_data = array(
+			'relationships' => $paginated_relationships,
+			'total'         => $total,
+			'pages'         => $pages,
+			'page'          => $page,
+			'per_page'      => $per_page,
 		);
+
+		// Cache the response.
+		self::set_cache( $cache_key, $response_data );
+
+		return new WP_REST_Response( $response_data, 200 );
 	}
 
 	/**
@@ -1354,6 +1471,12 @@ class CPT_Tax_Syncer_REST_Controller {
 		// Save order to parent post meta.
 		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
 		update_post_meta( $parent_post_id, $order_meta_key, $order );
+
+		// Invalidate cache for this post type and taxonomy.
+		$parent_post = get_post( $parent_post_id );
+		if ( $parent_post ) {
+			self::invalidate_cache( $parent_post->post_type, $taxonomy );
+		}
 
 		return new WP_REST_Response(
 			array(

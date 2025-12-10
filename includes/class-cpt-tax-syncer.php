@@ -139,6 +139,13 @@ class CPT_Taxonomy_Syncer {
 		// Hook into term deletion to sync to post.
 		add_action( 'pre_delete_term', array( $this, 'sync_term_deletion_to_post' ), 10, 2 );
 
+		// Invalidate cache on post/term updates and deletions.
+		add_action( 'save_post_' . $this->cpt_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
+		add_action( 'delete_post', array( $this, 'invalidate_relationship_cache_on_delete' ), 999 );
+		add_action( 'created_' . $this->taxonomy_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
+		add_action( 'edited_' . $this->taxonomy_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
+		add_action( 'pre_delete_term', array( $this, 'invalidate_relationship_cache_on_term_delete' ), 999, 2 );
+
 		// Add redirect for taxonomy archive if enabled.
 		if ( $this->enable_redirect ) {
 			add_action( 'template_redirect', array( $this, 'redirect_taxonomy_archive' ) );
@@ -595,6 +602,40 @@ class CPT_Taxonomy_Syncer {
 
 		// Reset the deletion flag.
 		self::$is_deleting = false;
+	}
+
+	/**
+	 * Invalidate relationship cache when post/term is updated.
+	 *
+	 * @param int $object_id Post or term ID.
+	 */
+	public function invalidate_relationship_cache( $object_id ) {
+		CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+	}
+
+	/**
+	 * Invalidate relationship cache when post is deleted.
+	 *
+	 * @param int $post_id Post ID.
+	 */
+	public function invalidate_relationship_cache_on_delete( $post_id ) {
+		// Only invalidate if it's our CPT.
+		if ( get_post_type( $post_id ) === $this->cpt_slug ) {
+			CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+		}
+	}
+
+	/**
+	 * Invalidate relationship cache when term is deleted.
+	 *
+	 * @param int    $term_id Term ID.
+	 * @param string $taxonomy Taxonomy slug.
+	 */
+	public function invalidate_relationship_cache_on_term_delete( $term_id, $taxonomy ) {
+		// Only invalidate if it's our taxonomy.
+		if ( $taxonomy === $this->taxonomy_slug ) {
+			CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+		}
 	}
 
 	/**

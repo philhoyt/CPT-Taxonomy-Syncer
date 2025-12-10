@@ -37,6 +37,9 @@ define( 'CPT_TAX_SYNCER_DEFAULT_POST_STATUS', 'publish' );
 // Define batch size for bulk operations.
 define( 'CPT_TAX_SYNCER_BATCH_SIZE', 100 );
 
+// Define cache TTL for relationship queries (15 minutes).
+define( 'CPT_TAX_SYNCER_CACHE_TTL', 15 * MINUTE_IN_SECONDS );
+
 // Include required files.
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
