@@ -26,4 +26,3 @@ delete_option( 'cpt_taxonomy_syncer_pairs' );
 // - Loop through all posts of each CPT and delete _term_id_{taxonomy} meta
 // - Loop through all terms of each taxonomy and delete _post_id_{cpt} meta
 // This is intentionally left as a manual cleanup step if needed.
-
