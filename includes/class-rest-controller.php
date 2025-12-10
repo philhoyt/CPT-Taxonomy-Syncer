@@ -166,6 +166,315 @@ class CPT_Tax_Syncer_REST_Controller {
 	}
 
 	/**
+	 * Register global REST API routes (not tied to a specific CPT/taxonomy pair)
+	 * This should be called once, not per instance.
+	 */
+	public static function register_global_routes() {
+		$namespace = 'cpt-tax-syncer/v1';
+
+		register_rest_route(
+			$namespace,
+			'/relationships',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'get_all_relationships' ),
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+				'args'                => array(
+					'page'     => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page' => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+					'search'   => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'cpt_slug' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy_slug' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/post-type-relationships',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'get_post_type_relationships' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+				'args'                => array(
+					'post_type' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy'  => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'page'      => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page'  => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+					'search'    => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+	}
+
+
+	/**
+	 * Get all relationships across all configured pairs
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response The response
+	 */
+	public static function get_all_relationships( $request ) {
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
+
+		if ( empty( $pairs ) ) {
+			return new WP_REST_Response(
+				array(
+					'relationships' => array(),
+					'total'         => 0,
+					'pages'         => 0,
+				),
+				200
+			);
+		}
+
+		$all_relationships = array();
+		$search           = $request->get_param( 'search' );
+		$cpt_filter       = $request->get_param( 'cpt_slug' );
+		$taxonomy_filter  = $request->get_param( 'taxonomy_slug' );
+
+		foreach ( $pairs as $pair ) {
+			$cpt_slug      = $pair['cpt_slug'];
+			$taxonomy_slug = $pair['taxonomy_slug'];
+
+			// Apply filters.
+			if ( $cpt_filter && $cpt_slug !== $cpt_filter ) {
+				continue;
+			}
+			if ( $taxonomy_filter && $taxonomy_slug !== $taxonomy_filter ) {
+				continue;
+			}
+
+			// Get all posts for this CPT.
+			$posts = get_posts(
+				array(
+					'post_type'      => $cpt_slug,
+					'posts_per_page' => -1,
+					'post_status'    => 'any',
+				)
+			);
+
+			$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy_slug;
+
+			foreach ( $posts as $post ) {
+				$term_id = get_post_meta( $post->ID, $meta_key, true );
+
+				if ( ! $term_id ) {
+					continue;
+				}
+
+				$term = get_term( $term_id, $taxonomy_slug );
+
+				if ( ! $term || is_wp_error( $term ) ) {
+					continue;
+				}
+
+				// Apply search filter.
+				if ( $search ) {
+					$search_lower = strtolower( $search );
+					if (
+						strpos( strtolower( $post->post_title ), $search_lower ) === false &&
+						strpos( strtolower( $term->name ), $search_lower ) === false &&
+						strpos( strtolower( $cpt_slug ), $search_lower ) === false &&
+						strpos( strtolower( $taxonomy_slug ), $search_lower ) === false
+					) {
+						continue;
+					}
+				}
+
+				$all_relationships[] = array(
+					'id'            => $post->ID . '_' . $term_id,
+					'post_id'       => $post->ID,
+					'post_title'    => $post->post_title,
+					'post_type'     => $cpt_slug,
+					'post_status'   => $post->post_status,
+					'post_edit_url' => get_edit_post_link( $post->ID, 'raw' ),
+					'post_view_url' => get_permalink( $post->ID ),
+					'term_id'       => $term_id,
+					'term_name'     => $term->name,
+					'term_slug'     => $term->slug,
+					'taxonomy'      => $taxonomy_slug,
+					'term_edit_url' => admin_url( 'term.php?taxonomy=' . $taxonomy_slug . '&tag_ID=' . $term_id ),
+					'term_count'    => $term->count,
+				);
+			}
+		}
+
+		// Pagination.
+		$page     = $request->get_param( 'page' );
+		$per_page = $request->get_param( 'per_page' );
+		$total    = count( $all_relationships );
+		$pages    = ceil( $total / $per_page );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		$relationships = array_slice( $all_relationships, $offset, $per_page );
+
+		return new WP_REST_Response(
+			array(
+				'relationships' => $relationships,
+				'total'         => $total,
+				'pages'         => $pages,
+				'page'          => $page,
+				'per_page'      => $per_page,
+			),
+			200
+		);
+	}
+
+	/**
+	 * Get post type relationships (posts with their related posts)
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response The response
+	 */
+	public static function get_post_type_relationships( $request ) {
+		$post_type = $request->get_param( 'post_type' );
+		$taxonomy  = $request->get_param( 'taxonomy' );
+		$page      = $request->get_param( 'page' );
+		$per_page  = $request->get_param( 'per_page' );
+		$search    = $request->get_param( 'search' );
+
+		if ( ! post_type_exists( $post_type ) || ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'invalid_post_type_or_taxonomy',
+				__( 'Invalid post type or taxonomy.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Get all posts of this type that have a synced term.
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy;
+
+		$query_args = array(
+			'post_type'      => $post_type,
+			'posts_per_page' => -1, // Get all for now, we'll paginate after.
+			'post_status'    => 'any',
+			'meta_query'     => array(
+				array(
+					'key'     => $meta_key,
+					'compare' => 'EXISTS',
+				),
+			),
+		);
+
+		if ( $search ) {
+			$query_args['s'] = $search;
+		}
+
+		$posts = get_posts( $query_args );
+
+		$relationships = array();
+
+		foreach ( $posts as $post ) {
+			$term_id = get_post_meta( $post->ID, $meta_key, true );
+
+			if ( ! $term_id ) {
+				continue;
+			}
+
+			$term = get_term( $term_id, $taxonomy );
+			if ( ! $term || is_wp_error( $term ) ) {
+				continue;
+			}
+
+			// Get all posts that share this taxonomy term (excluding the current post).
+			$related_posts = get_posts(
+				array(
+					'post_type'      => 'any',
+					'posts_per_page' => -1,
+					'post_status'    => 'any',
+					'post__not_in'   => array( $post->ID ),
+					'tax_query'      => array(
+						array(
+							'taxonomy' => $taxonomy,
+							'field'    => 'term_id',
+							'terms'    => $term_id,
+						),
+					),
+				)
+			);
+
+			$related_posts_data = array();
+			foreach ( $related_posts as $related_post ) {
+				$related_posts_data[] = array(
+					'id'          => $related_post->ID,
+					'title'       => $related_post->post_title,
+					'post_type'   => $related_post->post_type,
+					'post_status' => $related_post->post_status,
+					'edit_url'    => get_edit_post_link( $related_post->ID, 'raw' ),
+					'view_url'    => get_permalink( $related_post->ID ),
+				);
+			}
+
+			$relationships[] = array(
+				'post'           => array(
+					'id'          => $post->ID,
+					'title'       => $post->post_title,
+					'post_type'   => $post->post_type,
+					'post_status' => $post->post_status,
+					'edit_url'    => get_edit_post_link( $post->ID, 'raw' ),
+					'view_url'    => get_permalink( $post->ID ),
+				),
+				'term'           => array(
+					'id'   => $term_id,
+					'name' => $term->name,
+					'slug' => $term->slug,
+				),
+				'related_posts'  => $related_posts_data,
+				'related_count'  => count( $related_posts_data ),
+			);
+		}
+
+		// Pagination.
+		$total = count( $relationships );
+		$pages = ceil( $total / $per_page );
+		$offset = ( $page - 1 ) * $per_page;
+
+		$paginated_relationships = array_slice( $relationships, $offset, $per_page );
+
+		return new WP_REST_Response(
+			array(
+				'relationships' => $paginated_relationships,
+				'total'         => $total,
+				'pages'         => $pages,
+				'page'          => $page,
+				'per_page'      => $per_page,
+			),
+			200
+		);
+	}
+
+	/**
 	 * Check if the current user has permission to use the endpoints
 	 *
 	 * Individual create operations use edit_posts to match admin menu capability.

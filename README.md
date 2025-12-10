@@ -54,10 +54,22 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies, creating
 3. Toggle **"Use synced relationship"**
 4. Select target post type from Query Loop settings
 
+## Development
+
+This plugin uses `@wordpress/scripts` for building JavaScript assets. See [BUILD.md](BUILD.md) for build instructions.
+
+### Quick Start
+
+```bash
+npm install
+npm run build
+```
+
 ## Requirements
 
 - WordPress 6.7+
 - PHP 7.0+
+- Node.js 14+ (for building assets)
 
 ## License
 

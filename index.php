@@ -75,5 +75,8 @@ function cpt_taxonomy_syncer_init() {
 	new CPT_Tax_Syncer_Relationship_Query();
 }
 
+// Register global REST API routes (only once).
+add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_REST_Controller', 'register_global_routes' ), 10 );
+
 // Register the initialization hook.
 add_action( 'init', 'cpt_taxonomy_syncer_init' );

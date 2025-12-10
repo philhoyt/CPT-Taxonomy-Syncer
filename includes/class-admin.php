@@ -44,6 +44,9 @@ class CPT_Tax_Syncer_Admin {
 
 		// Add synced post info to term edit pages.
 		add_action( 'init', array( $this, 'add_term_edit_info' ), 20 );
+
+		// Add relationship dashboard pages under post type menus.
+		add_action( 'admin_menu', array( $this, 'add_relationship_dashboard_pages' ), 20 );
 	}
 
 	/**
@@ -56,6 +59,15 @@ class CPT_Tax_Syncer_Admin {
 			'manage_options',
 			'cpt-taxonomy-syncer',
 			array( $this, 'render_settings_page' )
+		);
+
+		// Add relationships dashboard page.
+		add_management_page(
+			'CPT-Taxonomy Relationships',
+			'CPT-Tax Relationships',
+			'manage_options',
+			'cpt-taxonomy-syncer-relationships',
+			array( $this, 'render_relationships_page' )
 		);
 	}
 
@@ -124,6 +136,135 @@ class CPT_Tax_Syncer_Admin {
 					'pairs'    => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
 				)
 			);
+		}
+
+		// Check if this is a post type relationships page.
+		$is_relationships_page = strpos( $hook, 'cpt-tax-syncer-relationships-' ) !== false;
+
+		if ( $hook === 'tools_page_cpt-taxonomy-syncer-relationships' ) {
+			// Check if built file exists (from npm build), otherwise use source.
+			$script_path = 'assets/js/relationships-dashboard.js';
+			$script_url  = CPT_TAXONOMY_SYNCER_PLUGIN_URL . $script_path;
+			$script_file = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . $script_path;
+
+			// If built file doesn't exist, show admin notice.
+			if ( ! file_exists( $script_file ) ) {
+				add_action(
+					'admin_notices',
+					function () {
+						?>
+						<div class="notice notice-error">
+							<p>
+								<strong><?php esc_html_e( 'CPT Taxonomy Syncer:', 'cpt-taxonomy-syncer' ); ?></strong>
+								<?php
+								printf(
+									/* translators: %s: npm build command */
+									esc_html__( 'The relationships dashboard requires a build step. Please run %s in the plugin directory.', 'cpt-taxonomy-syncer' ),
+									'<code>npm install && npm run build</code>'
+								);
+								?>
+							</p>
+						</div>
+						<?php
+					}
+				);
+				return;
+			}
+
+			// Enqueue WordPress packages.
+			wp_enqueue_script( 'wp-element' );
+			wp_enqueue_script( 'wp-api-fetch' );
+			wp_enqueue_script( 'wp-i18n' );
+
+			// Enqueue our relationships dashboard script.
+			wp_enqueue_script(
+				'cpt-tax-syncer-relationships',
+				$script_url,
+				array(
+					'wp-element',
+					'wp-api-fetch',
+					'wp-i18n',
+				),
+				filemtime( $script_file ), // Use file modification time for cache busting.
+				true
+			);
+
+			wp_localize_script(
+				'cpt-tax-syncer-relationships',
+				'cptTaxSyncerRelationships',
+				array(
+					'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
+					'nonce'    => wp_create_nonce( 'wp_rest' ),
+				)
+			);
+
+			// Set script translations.
+			if ( function_exists( 'wp_set_script_translations' ) ) {
+				wp_set_script_translations( 'cpt-tax-syncer-relationships', 'cpt-taxonomy-syncer' );
+			}
+		}
+
+		if ( $is_relationships_page ) {
+			// Check if built file exists (from npm build), otherwise use source.
+			$script_path = 'assets/js/post-type-relationships-dashboard.js';
+			$script_url  = CPT_TAXONOMY_SYNCER_PLUGIN_URL . $script_path;
+			$script_file = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . $script_path;
+
+			// If built file doesn't exist, show admin notice.
+			if ( ! file_exists( $script_file ) ) {
+				add_action(
+					'admin_notices',
+					function () {
+						?>
+						<div class="notice notice-error">
+							<p>
+								<strong><?php esc_html_e( 'CPT Taxonomy Syncer:', 'cpt-taxonomy-syncer' ); ?></strong>
+								<?php
+								printf(
+									/* translators: %s: npm build command */
+									esc_html__( 'The relationships dashboard requires a build step. Please run %s in the plugin directory.', 'cpt-taxonomy-syncer' ),
+									'<code>npm install && npm run build</code>'
+								);
+								?>
+							</p>
+						</div>
+						<?php
+					}
+				);
+				return;
+			}
+
+			// Enqueue WordPress packages.
+			wp_enqueue_script( 'wp-element' );
+			wp_enqueue_script( 'wp-api-fetch' );
+			wp_enqueue_script( 'wp-i18n' );
+
+			// Enqueue our post type relationships dashboard script.
+			wp_enqueue_script(
+				'cpt-tax-syncer-post-type-relationships',
+				$script_url,
+				array(
+					'wp-element',
+					'wp-api-fetch',
+					'wp-i18n',
+				),
+				filemtime( $script_file ), // Use file modification time for cache busting.
+				true
+			);
+
+			wp_localize_script(
+				'cpt-tax-syncer-post-type-relationships',
+				'cptTaxSyncerPostTypeRelationships',
+				array(
+					'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
+					'nonce'    => wp_create_nonce( 'wp_rest' ),
+				)
+			);
+
+			// Set script translations.
+			if ( function_exists( 'wp_set_script_translations' ) ) {
+				wp_set_script_translations( 'cpt-tax-syncer-post-type-relationships', 'cpt-taxonomy-syncer' );
+			}
 		}
 	}
 
@@ -538,6 +679,126 @@ class CPT_Tax_Syncer_Admin {
 				</div>
 			</td>
 		</tr>
+		<?php
+	}
+
+	/**
+	 * Render relationships dashboard page
+	 */
+	public function render_relationships_page() {
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'CPT-Taxonomy Relationships', 'cpt-taxonomy-syncer' ); ?></h1>
+			<p><?php esc_html_e( 'View all relationships between custom post types and taxonomies created by CPT Taxonomy Syncer.', 'cpt-taxonomy-syncer' ); ?></p>
+			<div id="cpt-tax-relationships-dashboard"></div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Add relationship dashboard pages under post type menus
+	 */
+	public function add_relationship_dashboard_pages() {
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
+
+		foreach ( $pairs as $pair ) {
+			$cpt_slug      = $pair['cpt_slug'];
+			$taxonomy_slug = $pair['taxonomy_slug'];
+
+			$post_type_object = get_post_type_object( $cpt_slug );
+			if ( ! $post_type_object ) {
+				continue;
+			}
+
+			// Get the menu slug for this post type.
+			$menu_slug = 'edit.php';
+			if ( 'post' !== $cpt_slug ) {
+				$menu_slug = 'edit.php?post_type=' . $cpt_slug;
+			}
+
+			// Add submenu page under the post type menu.
+			add_submenu_page(
+				$menu_slug,
+				sprintf(
+					/* translators: %s: Post type name */
+					__( 'Relationships - %s', 'cpt-taxonomy-syncer' ),
+					$post_type_object->labels->name
+				),
+				__( 'Relationships', 'cpt-taxonomy-syncer' ),
+				$post_type_object->cap->edit_posts,
+				'cpt-tax-syncer-relationships-' . $cpt_slug,
+				array( $this, 'render_post_type_relationships_page' )
+			);
+		}
+	}
+
+	/**
+	 * Render post type relationships dashboard page
+	 */
+	public function render_post_type_relationships_page() {
+		// Get the post type from the page slug.
+		$screen = get_current_screen();
+		if ( ! $screen ) {
+			return;
+		}
+
+		// Extract post type from page slug: {post_type}_page_cpt-tax-syncer-relationships-{post_type}.
+		$page_slug = $screen->id;
+		$post_type = str_replace( '_page_cpt-tax-syncer-relationships-', '', $page_slug );
+		$post_type = str_replace( 'cpt-tax-syncer-relationships-', '', $post_type );
+
+		// If still contains underscores, try to extract from the end.
+		if ( strpos( $post_type, '_' ) !== false ) {
+			$parts     = explode( '_', $post_type );
+			$post_type = end( $parts );
+		}
+
+		// Get the pair for this post type.
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
+		$pair  = null;
+		foreach ( $pairs as $p ) {
+			if ( $p['cpt_slug'] === $post_type ) {
+				$pair = $p;
+				break;
+			}
+		}
+
+		if ( ! $pair ) {
+			wp_die( esc_html__( 'No relationship configuration found for this post type.', 'cpt-taxonomy-syncer' ) );
+		}
+
+		$post_type_object = get_post_type_object( $post_type );
+		if ( ! $post_type_object ) {
+			wp_die( esc_html__( 'Invalid post type.', 'cpt-taxonomy-syncer' ) );
+		}
+
+		?>
+		<div class="wrap">
+			<h1>
+				<?php
+				printf(
+					/* translators: %s: Post type name */
+					esc_html__( 'Relationships - %s', 'cpt-taxonomy-syncer' ),
+					esc_html( $post_type_object->labels->name )
+				);
+				?>
+			</h1>
+			<p>
+				<?php
+				printf(
+					/* translators: %1$s: Post type name, %2$s: Taxonomy name */
+					esc_html__( 'View posts of type %1$s and their related posts through the %2$s taxonomy.', 'cpt-taxonomy-syncer' ),
+					'<strong>' . esc_html( $post_type_object->labels->name ) . '</strong>',
+					'<strong>' . esc_html( $pair['taxonomy_slug'] ) . '</strong>'
+				);
+				?>
+			</p>
+			<div 
+				id="cpt-tax-post-type-relationships-dashboard" 
+				data-post-type="<?php echo esc_attr( $post_type ); ?>"
+				data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>"
+			></div>
+		</div>
 		<?php
 	}
 }
