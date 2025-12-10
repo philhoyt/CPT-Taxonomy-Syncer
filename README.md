@@ -1,6 +1,6 @@
 # CPT-Taxonomy Syncer
 
-[![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.1.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
+[![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.2.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
 
 A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
 
@@ -65,10 +65,31 @@ npm install
 npm run build
 ```
 
+## Changelog
+
+### 1.2.0
+- Major performance improvements with transient caching for relationship queries
+- Implemented query result caching with automatic invalidation
+- Optimized REST API endpoints to eliminate N+1 query problems
+- Added comprehensive developer hooks and filters for extensibility
+- Improved static cache management with TTL-based expiration
+- Enhanced developer reference section with meta key values
+- Fixed admin.js with batch processing and progress indicators
+
+### 1.1.0
+- Major performance improvements with optimized bulk sync operations
+- Implemented batch processing with REST API endpoints
+- Fixed duplicate post title handling
+- Added admin columns and synced post information
+- Full internationalization support
+
+### 1.0.0
+- Initial release
+
 ## Requirements
 
-- WordPress 6.7+
-- PHP 7.0+
+- WordPress 6.0+
+- PHP 7.4+
 - Node.js 14+ (for building assets)
 
 ## License
