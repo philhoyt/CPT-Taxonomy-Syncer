@@ -23,6 +23,10 @@ CPT-Taxonomy Syncer automatically creates and maintains bidirectional relationsh
 * **Duplicate Prevention**: Prevents duplicate creation and maintains data integrity
 * **Block Editor Integration**: Adds "Use synced relationship" toggle to Query Loop blocks and Relationship Query Loop block variation
 * **Related Content Display**: Displays posts that share taxonomy terms with the current post using the shadow taxonomy relationship
+* **Custom Ordering**: Drag-and-drop interface to reorder related posts per relationship with automatic saving
+* **Relationships Dashboard**: Per post-type dashboard showing parent-to-child relationships with visual ordering interface
+* **Previous/Next Post Blocks**: Custom navigation blocks that respect custom ordering for seamless post navigation
+* **Menu Order Fallback**: Automatically uses `menu_order` when custom order hasn't been explicitly set
 * **Shadow Taxonomy System**: Creates a taxonomy that mirrors your post type, enabling powerful relationship queries between related posts
 * **Admin Tools**: Settings page with manual bulk sync operations for existing content
 * **Archive Redirection**: Optional redirect from taxonomy archive pages to corresponding post pages
@@ -72,7 +76,15 @@ Yes! Use the bulk sync buttons on the settings page to sync existing posts to te
 
 = How does the block editor integration work? =
 
-Add a Query Loop block or Relationship Query Loop block variation to any template. In the block inspector, find the **Synced Relationships** panel and toggle **"Use synced relationship"**. This will display posts that share taxonomy terms with the current post.
+Add a Query Loop block or Relationship Query Loop block variation to any template. In the block inspector, find the **Synced Relationships** panel and toggle **"Use synced relationship"**. This will display posts that share taxonomy terms with the current post. Enable **"Use custom order"** to respect the order set in the Relationships dashboard.
+
+= How does custom ordering work? =
+
+Navigate to your post type's admin menu (e.g., **Posts → Relationships**) to access the Relationships dashboard. Here you can see all parent posts and their related posts. Drag and drop related posts to reorder them - the order is automatically saved. This custom order is then used by Query Loop blocks (when "Use custom order" is enabled) and Previous/Next Post blocks.
+
+= What are the Previous/Next Post blocks? =
+
+These are custom blocks that provide navigation between posts based on your relationship configuration. They respect the custom order set in the Relationships dashboard, allowing you to navigate through related posts in the exact order you've defined. You can customize the link text and choose which relationship pair to use for navigation.
 
 = What if I have duplicate post titles? =
 
@@ -97,10 +109,15 @@ When you delete a synced post, the corresponding term is automatically deleted (
 == Changelog ==
 
 = 1.2.0 =
+* **Custom Ordering System**: Drag-and-drop interface for reordering related posts per relationship
+* **Relationships Dashboard**: Per post-type dashboard (e.g., Posts → Relationships) showing parent-to-child relationships with visual ordering interface
+* **Previous/Next Post Blocks**: Custom navigation blocks (`cpt-tax-syncer/previous-post-relationship` and `cpt-tax-syncer/next-post-relationship`) with relationship-based ordering support
+* **Menu Order Fallback**: Automatic fallback to `menu_order` when custom order hasn't been explicitly set
+* **Custom Order Toggle**: Added "Use custom order" toggle to Query Loop block variation for controlling ordering behavior
 * Major performance improvements with transient caching for relationship queries
 * Implemented query result caching with automatic invalidation on post/term updates
 * Added maximum query limits to prevent memory issues with large datasets
-* Optimized REST API endpoints
+* Optimized REST API endpoints to eliminate N+1 query problems
 * Added comprehensive developer hooks and filters for extensibility:
   * `cpt_tax_syncer_before_sync_post_to_term` - Filter to prevent/modify post-to-term sync
   * `cpt_tax_syncer_after_sync_post_to_term` - Action hook after post-to-term sync

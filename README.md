@@ -23,6 +23,9 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies, creating
 
 - Adds "Use synced relationship" toggle to Query Loop blocks and **Relationship Query Loop** block variation
 - Displays posts that share taxonomy terms with the current post using the shadow taxonomy relationship
+- **Custom Ordering**: Drag-and-drop interface to reorder related posts per relationship
+- **Previous/Next Post Blocks**: Custom navigation blocks that respect custom ordering
+- **Menu Order Fallback**: Automatically uses `menu_order` when custom order hasn't been set
 
 ### Admin Tools
 
@@ -30,6 +33,7 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies, creating
 - Add/remove CPT-taxonomy sync pairs
 - Manual bulk sync operations for existing content
 - Optional archive redirection from taxonomy pages to post pages
+- **Relationships Dashboard**: Per post-type dashboard showing parent-to-child relationships with drag-and-drop ordering
 
 ## Installation
 
@@ -53,6 +57,22 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies, creating
 2. In block inspector, find **Synced Relationships** panel
 3. Toggle **"Use synced relationship"**
 4. Select target post type from Query Loop settings
+5. Optionally enable **"Use custom order"** to respect the order set in the Relationships dashboard
+
+### Custom Ordering
+
+1. Navigate to your post type's admin menu (e.g., **Posts → Relationships**)
+2. View all parent posts and their related posts
+3. Drag and drop related posts to reorder them
+4. The custom order is automatically saved and used by Query Loop blocks and Previous/Next Post blocks
+
+### Previous/Next Post Navigation
+
+1. Add **Previous Post (Relationship)** or **Next Post (Relationship)** blocks to your templates
+2. Select the relationship pair to use for navigation
+3. Optionally enable/disable custom order
+4. Customize the link text (default: "Previous:" or "Next:")
+5. Navigation respects the custom order set in the Relationships dashboard
 
 ## Development
 
@@ -68,6 +88,10 @@ npm run build
 ## Changelog
 
 ### 1.2.0
+- **Custom Ordering System**: Drag-and-drop interface for reordering related posts per relationship
+- **Relationships Dashboard**: Per post-type dashboard showing parent-to-child relationships
+- **Previous/Next Post Blocks**: Custom navigation blocks with relationship-based ordering support
+- **Menu Order Fallback**: Automatic fallback to `menu_order` when custom order isn't set
 - Major performance improvements with transient caching for relationship queries
 - Implemented query result caching with automatic invalidation
 - Optimized REST API endpoints to eliminate N+1 query problems
