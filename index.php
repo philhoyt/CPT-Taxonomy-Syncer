@@ -3,7 +3,7 @@
  * Plugin Name: CPT-Taxonomy Syncer
  * Plugin URI:        https://github.com/philhoyt/CPT-Taxonomy-Syncer
  * Description: Automatically syncs a custom post type with a taxonomy
- * Version: 1.1.0
+ * Version: 1.2.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Tested up to: 6.9
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'CPT_TAXONOMY_SYNCER_VERSION', '1.1.0' );
+define( 'CPT_TAXONOMY_SYNCER_VERSION', '1.2.0' );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -37,11 +37,15 @@ define( 'CPT_TAX_SYNCER_DEFAULT_POST_STATUS', 'publish' );
 // Define batch size for bulk operations.
 define( 'CPT_TAX_SYNCER_BATCH_SIZE', 100 );
 
+// Define cache TTL for relationship queries (15 minutes).
+define( 'CPT_TAX_SYNCER_CACHE_TTL', 15 * MINUTE_IN_SECONDS );
+
 // Include required files.
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-adjacent-post-blocks.php';
 
 // Include WP-CLI commands if WP-CLI is available.
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -73,7 +77,13 @@ function cpt_taxonomy_syncer_init() {
 
 	// Initialize relationship query handler.
 	new CPT_Tax_Syncer_Relationship_Query();
+
+	// Initialize adjacent post blocks.
+	new CPT_Tax_Syncer_Adjacent_Post_Blocks();
 }
+
+// Register global REST API routes (only once).
+add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_REST_Controller', 'register_global_routes' ), 10 );
 
 // Register the initialization hook.
 add_action( 'init', 'cpt_taxonomy_syncer_init' );

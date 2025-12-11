@@ -1,4 +1,38 @@
-/vendor
+# Dependencies
+node_modules/
+
+# Build output
+build/
+assets/js/*.min.js
+assets/css/*.min.css
+
+# WordPress
+.htaccess
+wp-config.php
+wp-content/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
 *.zip
-/node_modules
+/vendor
+audit.md

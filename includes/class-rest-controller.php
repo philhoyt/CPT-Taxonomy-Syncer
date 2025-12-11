@@ -26,6 +26,84 @@ class CPT_Tax_Syncer_REST_Controller {
 	private $namespace = 'cpt-tax-syncer/v1';
 
 	/**
+	 * Cache TTL for relationship queries (filterable).
+	 *
+	 * @return int Cache TTL in seconds.
+	 */
+	private static function get_cache_ttl() {
+		return apply_filters( 'cpt_tax_syncer_cache_ttl', CPT_TAX_SYNCER_CACHE_TTL );
+	}
+
+	/**
+	 * Generate cache key for relationship queries.
+	 *
+	 * @param string $endpoint Endpoint name.
+	 * @param array  $params Query parameters.
+	 * @return string Cache key.
+	 */
+	private static function get_cache_key( $endpoint, $params ) {
+		// Sort params for consistent cache keys.
+		ksort( $params );
+		// Use json_encode instead of serialize for better security.
+		$key_string = $endpoint . '_' . md5( wp_json_encode( $params ) );
+		return 'cpt_tax_syncer_' . $key_string;
+	}
+
+	/**
+	 * Invalidate cache for a specific post type and taxonomy.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @param string $taxonomy Taxonomy slug.
+	 */
+	public static function invalidate_cache( $post_type = null, $taxonomy = null ) {
+		// If specific post type/taxonomy provided, invalidate only those.
+		if ( $post_type && $taxonomy ) {
+			// Invalidate all caches for this pair (both endpoints).
+			$patterns = array(
+				'cpt_tax_syncer_get_all_relationships_*',
+				'cpt_tax_syncer_get_post_type_relationships_*',
+			);
+
+			// Delete transients matching pattern (WordPress doesn't have wildcard delete, so we'll use a different approach).
+			// For now, we'll invalidate all relationship caches when any relationship changes.
+			// This is simpler and ensures consistency.
+		}
+
+		// Invalidate all relationship caches.
+		// WordPress doesn't support wildcard transient deletion, so we use a version-based approach.
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		update_option( 'cpt_tax_syncer_cache_version', $cache_version + 1, false );
+	}
+
+	/**
+	 * Get cached data or false if not found/expired.
+	 *
+	 * @param string $cache_key Cache key.
+	 * @return mixed|false Cached data or false.
+	 */
+	private static function get_cache( $cache_key ) {
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		$versioned_key = $cache_key . '_v' . $cache_version;
+		return get_transient( $versioned_key );
+	}
+
+	/**
+	 * Set cache data.
+	 *
+	 * @param string $cache_key Cache key.
+	 * @param mixed  $data Data to cache.
+	 * @param int    $ttl Time to live in seconds (optional, uses default if not provided).
+	 */
+	private static function set_cache( $cache_key, $data, $ttl = null ) {
+		if ( null === $ttl ) {
+			$ttl = self::get_cache_ttl();
+		}
+		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
+		$versioned_key = $cache_key . '_v' . $cache_version;
+		set_transient( $versioned_key, $data, $ttl );
+	}
+
+	/**
 	 * The custom post type slug
 	 *
 	 * @var string
@@ -163,6 +241,653 @@ class CPT_Tax_Syncer_REST_Controller {
 				'permission_callback' => array( $this, 'check_bulk_permission' ),
 			)
 		);
+	}
+
+	/**
+	 * Register global REST API routes (not tied to a specific CPT/taxonomy pair)
+	 * This should be called once, not per instance.
+	 */
+	public static function register_global_routes() {
+		$namespace = 'cpt-tax-syncer/v1';
+
+		register_rest_route(
+			$namespace,
+			'/relationships',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'get_all_relationships' ),
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+				'args'                => array(
+					'page'          => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page'      => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+					'search'        => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'cpt_slug'      => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy_slug' => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/post-type-relationships',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'get_post_type_relationships' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+				'args'                => array(
+					'post_type' => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy'  => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'page'      => array(
+						'default'           => 1,
+						'sanitize_callback' => 'absint',
+					),
+					'per_page'  => array(
+						'default'           => 20,
+						'sanitize_callback' => 'absint',
+					),
+					'search'    => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Register endpoint to update relationship order.
+		register_rest_route(
+			$namespace,
+			'/relationship-order',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'update_relationship_order' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+				'args'                => array(
+					'parent_post_id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+					'taxonomy'       => array(
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'order'          => array(
+						'required'          => true,
+						'validate_callback' => function ( $param ) {
+							return is_array( $param );
+						},
+					),
+				),
+			)
+		);
+	}
+
+
+	/**
+	 * Get all relationships across all configured pairs
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response The response
+	 */
+	public static function get_all_relationships( $request ) {
+		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
+
+		if ( empty( $pairs ) ) {
+			return new WP_REST_Response(
+				array(
+					'relationships' => array(),
+					'total'         => 0,
+					'pages'         => 0,
+				),
+				200
+			);
+		}
+
+		// Build cache key from request parameters.
+		$search          = $request->get_param( 'search' );
+		$cpt_filter      = $request->get_param( 'cpt_slug' );
+		$taxonomy_filter = $request->get_param( 'taxonomy_slug' );
+		$page            = $request->get_param( 'page' );
+		$per_page        = $request->get_param( 'per_page' );
+
+		$cache_params = array(
+			'search'        => $search,
+			'cpt_slug'      => $cpt_filter,
+			'taxonomy_slug' => $taxonomy_filter,
+			'page'          => $page,
+			'per_page'      => $per_page,
+		);
+		$cache_key    = self::get_cache_key( 'get_all_relationships', $cache_params );
+
+		// Try to get from cache.
+		$cached = self::get_cache( $cache_key );
+		if ( false !== $cached ) {
+			return new WP_REST_Response( $cached, 200 );
+		}
+
+		$all_relationships = array();
+
+		foreach ( $pairs as $pair ) {
+			$cpt_slug      = $pair['cpt_slug'];
+			$taxonomy_slug = $pair['taxonomy_slug'];
+
+			// Apply filters.
+			if ( $cpt_filter && $cpt_slug !== $cpt_filter ) {
+				continue;
+			}
+			if ( $taxonomy_filter && $taxonomy_slug !== $taxonomy_filter ) {
+				continue;
+			}
+
+			// Get all posts for this CPT (with maximum limit to prevent memory issues).
+			$max_posts_per_query = apply_filters( 'cpt_tax_syncer_max_posts_per_query', 1000 );
+			$posts               = get_posts(
+				array(
+					'post_type'      => $cpt_slug,
+					'posts_per_page' => $max_posts_per_query,
+					'post_status'    => 'any',
+					'fields'         => 'ids', // Only get IDs for performance.
+				)
+			);
+
+			if ( empty( $posts ) ) {
+				continue;
+			}
+
+			$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy_slug;
+
+			// Bulk fetch all meta values (1 query instead of N).
+			global $wpdb;
+			if ( empty( $posts ) ) {
+				continue;
+			}
+
+			// Build placeholders for IN clause.
+			$placeholders = implode( ',', array_fill( 0, count( $posts ), '%d' ) );
+			$query        = "SELECT post_id, meta_value 
+				FROM {$wpdb->postmeta} 
+				WHERE post_id IN ($placeholders) 
+				AND meta_key = %s";
+
+			// Prepare query with post IDs and meta key.
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+			$prepared = $wpdb->prepare( $query, array_merge( $posts, array( $meta_key ) ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+			$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
+
+			// Build lookup array: post_id => term_id.
+			$post_to_term_map = array();
+			$term_ids         = array();
+			foreach ( $meta_values as $meta_row ) {
+				$term_id = (int) $meta_row['meta_value'];
+				if ( $term_id > 0 ) {
+					$post_to_term_map[ (int) $meta_row['post_id'] ] = $term_id;
+					$term_ids[]                                     = $term_id;
+				}
+			}
+
+			if ( empty( $term_ids ) ) {
+				continue;
+			}
+
+			// Bulk fetch all terms (1 query instead of N).
+			$terms = get_terms(
+				array(
+					'taxonomy'   => $taxonomy_slug,
+					'include'    => array_unique( $term_ids ),
+					'hide_empty' => false,
+				)
+			);
+
+			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+
+			// Build lookup array: term_id => term object.
+			$terms_map = array();
+			foreach ( $terms as $term ) {
+				$terms_map[ $term->term_id ] = $term;
+			}
+
+			// Get full post objects only for posts that have valid terms.
+			$valid_post_ids = array_keys( $post_to_term_map );
+			$full_posts     = get_posts(
+				array(
+					'post_type'      => $cpt_slug,
+					'post__in'       => $valid_post_ids,
+					'posts_per_page' => -1,
+					'post_status'    => 'any',
+					'orderby'        => 'post__in', // Preserve order.
+				)
+			);
+
+			// Build lookup array: post_id => post object.
+			$posts_map = array();
+			foreach ( $full_posts as $post ) {
+				$posts_map[ $post->ID ] = $post;
+			}
+
+			// Now build relationships using lookup arrays (no queries in loop).
+			foreach ( $valid_post_ids as $post_id ) {
+				$post = isset( $posts_map[ $post_id ] ) ? $posts_map[ $post_id ] : null;
+				if ( ! $post ) {
+					continue;
+				}
+
+				$term_id = $post_to_term_map[ $post_id ];
+				$term    = isset( $terms_map[ $term_id ] ) ? $terms_map[ $term_id ] : null;
+
+				if ( ! $term ) {
+					continue;
+				}
+
+				// Apply search filter.
+				if ( $search ) {
+					$search_lower = strtolower( $search );
+					if (
+						strpos( strtolower( $post->post_title ), $search_lower ) === false &&
+						strpos( strtolower( $term->name ), $search_lower ) === false &&
+						strpos( strtolower( $cpt_slug ), $search_lower ) === false &&
+						strpos( strtolower( $taxonomy_slug ), $search_lower ) === false
+					) {
+						continue;
+					}
+				}
+
+				$all_relationships[] = array(
+					'id'            => $post->ID . '_' . $term_id,
+					'post_id'       => $post->ID,
+					'post_title'    => $post->post_title,
+					'post_type'     => $cpt_slug,
+					'post_status'   => $post->post_status,
+					'post_edit_url' => get_edit_post_link( $post->ID, 'raw' ),
+					'post_view_url' => get_permalink( $post->ID ),
+					'term_id'       => $term_id,
+					'term_name'     => $term->name,
+					'term_slug'     => $term->slug,
+					'taxonomy'      => $taxonomy_slug,
+					'term_edit_url' => admin_url( 'term.php?taxonomy=' . $taxonomy_slug . '&tag_ID=' . $term_id ),
+					'term_count'    => $term->count,
+				);
+			}
+		}
+
+		// Pagination.
+		$page     = $request->get_param( 'page' );
+		$per_page = $request->get_param( 'per_page' );
+		$total    = count( $all_relationships );
+		$pages    = ceil( $total / $per_page );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		$relationships = array_slice( $all_relationships, $offset, $per_page );
+
+		$response_data = array(
+			'relationships' => $relationships,
+			'total'         => $total,
+			'pages'         => $pages,
+			'page'          => $page,
+			'per_page'      => $per_page,
+		);
+
+		// Cache the response.
+		self::set_cache( $cache_key, $response_data );
+
+		return new WP_REST_Response( $response_data, 200 );
+	}
+
+	/**
+	 * Get post type relationships (posts with their related posts)
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response The response
+	 */
+	public static function get_post_type_relationships( $request ) {
+		$post_type = $request->get_param( 'post_type' );
+		$taxonomy  = $request->get_param( 'taxonomy' );
+		$page      = $request->get_param( 'page' );
+		$per_page  = $request->get_param( 'per_page' );
+		$search    = $request->get_param( 'search' );
+
+		if ( ! post_type_exists( $post_type ) || ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'invalid_post_type_or_taxonomy',
+				__( 'Invalid post type or taxonomy.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Build cache key from request parameters.
+		$cache_params = array(
+			'post_type' => $post_type,
+			'taxonomy'  => $taxonomy,
+			'page'      => $page,
+			'per_page'  => $per_page,
+			'search'    => $search,
+		);
+		$cache_key    = self::get_cache_key( 'get_post_type_relationships', $cache_params );
+
+		// Try to get from cache.
+		$cached = self::get_cache( $cache_key );
+		if ( false !== $cached ) {
+			return new WP_REST_Response( $cached, 200 );
+		}
+
+		// Get all posts of this type that have a synced term.
+		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy;
+
+		// Set maximum limit to prevent memory issues with large datasets.
+		$max_posts_per_query = apply_filters( 'cpt_tax_syncer_max_posts_per_query', 1000 );
+
+		$query_args = array(
+			'post_type'      => $post_type,
+			'posts_per_page' => $max_posts_per_query,
+			'post_status'    => 'any',
+			'meta_query'     => array(
+				array(
+					'key'     => $meta_key,
+					'compare' => 'EXISTS',
+				),
+			),
+		);
+
+		if ( $search ) {
+			$query_args['s'] = $search;
+		}
+
+		$posts = get_posts( $query_args );
+
+		if ( empty( $posts ) ) {
+			return new WP_REST_Response(
+				array(
+					'relationships' => array(),
+					'total'         => 0,
+					'pages'         => 0,
+					'page'          => $page,
+					'per_page'      => $per_page,
+				),
+				200
+			);
+		}
+
+		$post_ids = wp_list_pluck( $posts, 'ID' );
+
+		// Bulk fetch all meta values (1 query instead of N).
+		global $wpdb;
+
+		// Build placeholders for IN clause.
+		$placeholders   = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+
+		// Get term IDs and order meta in one query.
+		$query = "SELECT post_id, meta_key, meta_value 
+			FROM {$wpdb->postmeta} 
+			WHERE post_id IN ($placeholders) 
+			AND (meta_key = %s OR meta_key = %s)";
+
+		// Prepare query with post IDs and meta keys.
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+		$prepared = $wpdb->prepare(
+			$query,
+			array_merge(
+				$post_ids,
+				array(
+					$meta_key,
+					$order_meta_key,
+				)
+			)
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+		$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
+
+		// Build lookup arrays: post_id => term_id, post_id => order array.
+		$post_to_term_map  = array();
+		$post_to_order_map = array();
+		$term_ids          = array();
+
+		foreach ( $meta_values as $meta_row ) {
+			$post_id = (int) $meta_row['post_id'];
+			if ( $meta_row['meta_key'] === $meta_key ) {
+				$term_id = (int) $meta_row['meta_value'];
+				if ( $term_id > 0 ) {
+					$post_to_term_map[ $post_id ] = $term_id;
+					$term_ids[]                   = $term_id;
+				}
+			} elseif ( $meta_row['meta_key'] === $order_meta_key ) {
+				$order = maybe_unserialize( $meta_row['meta_value'] );
+				if ( is_array( $order ) ) {
+					$post_to_order_map[ $post_id ] = $order;
+				}
+			}
+		}
+
+		// Bulk fetch all terms (1 query instead of N).
+		$terms_map       = array();
+		$unique_term_ids = array();
+		if ( ! empty( $term_ids ) ) {
+			$unique_term_ids = array_unique( $term_ids );
+			$terms           = get_terms(
+				array(
+					'taxonomy'   => $taxonomy,
+					'include'    => $unique_term_ids,
+					'hide_empty' => false,
+				)
+			);
+
+			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+				foreach ( $terms as $term ) {
+					$terms_map[ $term->term_id ] = $term;
+				}
+			}
+		}
+
+		// Bulk fetch all related posts for all terms (1 query instead of N).
+		// Get all posts that have any of the terms we're interested in.
+		$all_related_posts = array();
+		$term_to_posts_map = array();
+
+		if ( ! empty( $unique_term_ids ) ) {
+			$all_related_posts = get_posts(
+				array(
+					'post_type'      => 'any',
+					'posts_per_page' => $max_posts_per_query,
+					'post_status'    => 'any',
+					'orderby'        => 'menu_order',
+					'order'          => 'ASC',
+					'tax_query'      => array(
+						array(
+							'taxonomy' => $taxonomy,
+							'field'    => 'term_id',
+							'terms'    => $unique_term_ids,
+						),
+					),
+				)
+			);
+
+			// Bulk fetch term relationships for all related posts (1 query instead of N).
+			if ( ! empty( $all_related_posts ) ) {
+				$related_post_ids = wp_list_pluck( $all_related_posts, 'ID' );
+
+				// Build placeholders for IN clause.
+				$related_placeholders = implode( ',', array_fill( 0, count( $related_post_ids ), '%d' ) );
+				$term_placeholders    = implode( ',', array_fill( 0, count( $unique_term_ids ), '%d' ) );
+
+				// Query term relationships in bulk.
+				$term_rel_query = "SELECT tr.object_id, tt.term_id 
+					FROM {$wpdb->term_relationships} tr
+					INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+					WHERE tr.object_id IN ($related_placeholders)
+					AND tt.taxonomy = %s
+					AND tt.term_id IN ($term_placeholders)";
+
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+				$term_rel_prepared = $wpdb->prepare(
+					$term_rel_query,
+					array_merge( $related_post_ids, array( $taxonomy ), $unique_term_ids )
+				);
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+				$term_relationships = $wpdb->get_results( $term_rel_prepared, ARRAY_A );
+
+				// Build lookup: term_id => array of posts.
+				$related_posts_by_id = array();
+				foreach ( $all_related_posts as $related_post ) {
+					$related_posts_by_id[ $related_post->ID ] = $related_post;
+				}
+
+				foreach ( $term_relationships as $rel ) {
+					$post_id     = (int) $rel['object_id'];
+					$rel_term_id = (int) $rel['term_id'];
+
+					if ( ! isset( $term_to_posts_map[ $rel_term_id ] ) ) {
+						$term_to_posts_map[ $rel_term_id ] = array();
+					}
+
+					if ( isset( $related_posts_by_id[ $post_id ] ) ) {
+						$term_to_posts_map[ $rel_term_id ][ $post_id ] = $related_posts_by_id[ $post_id ];
+					}
+				}
+			}
+		}
+
+		$relationships = array();
+
+		// Now build relationships using lookup arrays (no queries in loop).
+		foreach ( $posts as $post ) {
+			$term_id = isset( $post_to_term_map[ $post->ID ] ) ? $post_to_term_map[ $post->ID ] : null;
+
+			if ( ! $term_id ) {
+				continue;
+			}
+
+			$term = isset( $terms_map[ $term_id ] ) ? $terms_map[ $term_id ] : null;
+			if ( ! $term ) {
+				continue;
+			}
+
+			// Get related posts from lookup map (already filtered and ordered).
+			$related_posts = isset( $term_to_posts_map[ $term_id ] ) ? $term_to_posts_map[ $term_id ] : array();
+
+			// Exclude the current post from related posts.
+			unset( $related_posts[ $post->ID ] );
+
+			// Get saved order for this relationship.
+			$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+			$saved_order    = isset( $post_to_order_map[ $post->ID ] ) ? $post_to_order_map[ $post->ID ] : array();
+			if ( ! is_array( $saved_order ) ) {
+				$saved_order = array();
+			}
+
+			// Create a map of post IDs to posts for quick lookup.
+			$posts_map = array();
+			foreach ( $related_posts as $related_post ) {
+				$posts_map[ $related_post->ID ] = $related_post;
+			}
+
+			// Sort posts: first by saved order, then append any not in saved order.
+			$ordered_posts   = array();
+			$unordered_posts = array();
+
+			// Add posts in saved order.
+			foreach ( $saved_order as $post_id ) {
+				if ( isset( $posts_map[ $post_id ] ) ) {
+					$ordered_posts[] = $posts_map[ $post_id ];
+					unset( $posts_map[ $post_id ] );
+				}
+			}
+
+			// Add any remaining posts that weren't in the saved order.
+			foreach ( $posts_map as $related_post ) {
+				$unordered_posts[] = $related_post;
+			}
+
+			// Sort unordered posts by menu_order to maintain consistent initial ordering.
+			usort(
+				$unordered_posts,
+				function ( $a, $b ) {
+					$order_a = $a->menu_order ?? 0;
+					$order_b = $b->menu_order ?? 0;
+					if ( $order_a === $order_b ) {
+						// If menu_order is the same, sort by post ID for consistency.
+						return $a->ID - $b->ID;
+					}
+					return $order_a - $order_b;
+				}
+			);
+
+			// Combine ordered and unordered posts.
+			$related_posts = array_merge( $ordered_posts, $unordered_posts );
+
+			$related_posts_data = array();
+			foreach ( $related_posts as $related_post ) {
+				$related_posts_data[] = array(
+					'id'          => $related_post->ID,
+					'title'       => $related_post->post_title,
+					'post_type'   => $related_post->post_type,
+					'post_status' => $related_post->post_status,
+					'edit_url'    => get_edit_post_link( $related_post->ID, 'raw' ),
+					'view_url'    => get_permalink( $related_post->ID ),
+				);
+			}
+
+			$relationships[] = array(
+				'post'          => array(
+					'id'          => $post->ID,
+					'title'       => $post->post_title,
+					'post_type'   => $post->post_type,
+					'post_status' => $post->post_status,
+					'edit_url'    => get_edit_post_link( $post->ID, 'raw' ),
+					'view_url'    => get_permalink( $post->ID ),
+				),
+				'term'          => array(
+					'id'   => $term_id,
+					'name' => $term->name,
+					'slug' => $term->slug,
+				),
+				'related_posts' => $related_posts_data,
+				'related_count' => count( $related_posts_data ),
+			);
+		}
+
+		// Pagination.
+		$total  = count( $relationships );
+		$pages  = ceil( $total / $per_page );
+		$offset = ( $page - 1 ) * $per_page;
+
+		$paginated_relationships = array_slice( $relationships, $offset, $per_page );
+
+		$response_data = array(
+			'relationships' => $paginated_relationships,
+			'total'         => $total,
+			'pages'         => $pages,
+			'page'          => $page,
+			'per_page'      => $per_page,
+		);
+
+		// Cache the response.
+		self::set_cache( $cache_key, $response_data );
+
+		return new WP_REST_Response( $response_data, 200 );
 	}
 
 	/**
@@ -697,6 +1422,80 @@ class CPT_Tax_Syncer_REST_Controller {
 			'link'        => get_term_link( $term ),
 			'count'       => $term->count,
 			'description' => $term->description,
+		);
+	}
+
+	/**
+	 * Update relationship order
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 * @return WP_REST_Response|WP_Error The response or error
+	 */
+	public static function update_relationship_order( $request ) {
+		$parent_post_id = $request->get_param( 'parent_post_id' );
+		$taxonomy       = $request->get_param( 'taxonomy' );
+		$order          = $request->get_param( 'order' );
+
+		// Validate parent post exists.
+		$parent_post = get_post( $parent_post_id );
+		if ( ! $parent_post ) {
+			return new WP_Error(
+				'invalid_parent_post',
+				__( 'Parent post not found.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		// Validate taxonomy exists.
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'invalid_taxonomy',
+				__( 'Invalid taxonomy.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Validate order is an array of integers.
+		if ( ! is_array( $order ) ) {
+			return new WP_Error(
+				'invalid_order',
+				__( 'Order must be an array of post IDs.', 'cpt-taxonomy-syncer' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Sanitize order array (ensure all values are integers).
+		$order = array_map( 'absint', $order );
+		$order = array_filter( $order ); // Remove any zeros.
+
+		/**
+		 * Filter the relationship order before saving.
+		 *
+		 * @since 1.1.0
+		 *
+		 * @param array  $order          The order array of post IDs.
+		 * @param int    $parent_post_id The parent post ID.
+		 * @param string $taxonomy       The taxonomy slug.
+		 */
+		$order = apply_filters( 'cpt_tax_syncer_relationship_order', $order, $parent_post_id, $taxonomy );
+
+		// Save order to parent post meta.
+		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
+		update_post_meta( $parent_post_id, $order_meta_key, $order );
+
+		// Invalidate cache for this post type and taxonomy.
+		$parent_post = get_post( $parent_post_id );
+		if ( $parent_post ) {
+			self::invalidate_cache( $parent_post->post_type, $taxonomy );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'message' => __( 'Relationship order updated successfully.', 'cpt-taxonomy-syncer' ),
+				'order'   => $order,
+			),
+			200
 		);
 	}
 

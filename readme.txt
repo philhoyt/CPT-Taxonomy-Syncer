@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, block-editor, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -96,6 +96,23 @@ When you delete a synced post, the corresponding term is automatically deleted (
 
 == Changelog ==
 
+= 1.2.0 =
+* Major performance improvements with transient caching for relationship queries
+* Implemented query result caching with automatic invalidation on post/term updates
+* Added maximum query limits to prevent memory issues with large datasets
+* Optimized REST API endpoints
+* Added comprehensive developer hooks and filters for extensibility:
+  * `cpt_tax_syncer_before_sync_post_to_term` - Filter to prevent/modify post-to-term sync
+  * `cpt_tax_syncer_after_sync_post_to_term` - Action hook after post-to-term sync
+  * `cpt_tax_syncer_before_sync_term_to_post` - Filter to prevent/modify term-to-post sync
+  * `cpt_tax_syncer_after_sync_term_to_post` - Action hook after term-to-post sync
+  * `cpt_tax_syncer_relationship_order` - Filter custom order before saving
+  * `cpt_tax_syncer_query_vars` - Filter query vars for relationship queries
+* Improved static cache management with TTL-based expiration
+* Enhanced developer reference section on term edit pages with meta key values
+* Added custom order meta key display for developers
+* Improved cache invalidation strategy for better data freshness
+
 = 1.1.0 =
 * Major performance improvements with optimized bulk sync operations
 * Implemented batch processing with REST API endpoints for large datasets
@@ -120,6 +137,9 @@ When you delete a synced post, the corresponding term is automatically deleted (
 * REST API endpoints for batch processing
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Performance-focused update with significant improvements to query efficiency, caching system, and developer extensibility. New hooks allow developers to customize sync behavior. All existing functionality remains compatible.
 
 = 1.1.0 =
 Major update with significant performance improvements, WP-CLI support, enhanced security, and better handling of edge cases. All existing functionality remains compatible.

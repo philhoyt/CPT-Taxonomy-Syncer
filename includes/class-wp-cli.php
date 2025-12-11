@@ -78,7 +78,7 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 
 		// Temporarily disable syncing if requested.
 		if ( $skip_sync ) {
-			WP_CLI::log( "Syncing disabled - posts will be created without automatic term creation." );
+			WP_CLI::log( 'Syncing disabled - posts will be created without automatic term creation.' );
 			$syncer = CPT_Taxonomy_Syncer::get_syncer_instance( $cpt_slug, $taxonomy_slug );
 			if ( $syncer ) {
 				remove_action( 'save_post_' . $cpt_slug, array( $syncer, 'sync_post_to_term' ), 10 );
@@ -104,9 +104,9 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 			);
 
 			if ( is_wp_error( $post_id ) ) {
-				$errors++;
+				++$errors;
 			} else {
-				$created++;
+				++$created;
 
 				// Optionally create corresponding term with meta relationships.
 				if ( $create_terms ) {
@@ -195,8 +195,8 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 		WP_CLI::log( "Total items: {$total}" );
 		WP_CLI::log( "Batch size: {$batch_size}" );
 
-		$start_time = microtime( true );
-		$offset     = 0;
+		$start_time   = microtime( true );
+		$offset       = 0;
 		$total_synced = 0;
 		$total_errors = 0;
 		$batch_count  = 0;
@@ -213,13 +213,13 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 			}
 
 			$batch_time = microtime( true ) - $batch_start;
-			$batch_count++;
+			++$batch_count;
 
 			$total_synced += $result['synced'];
 			$total_errors += $result['errors'];
 
 			if ( $verbose ) {
-				WP_CLI::log( "Batch {$batch_count}: Synced {$result['synced']}, Errors {$result['errors']}, Time: " . round( $batch_time, 2 ) . "s" );
+				WP_CLI::log( "Batch {$batch_count}: Synced {$result['synced']}, Errors {$result['errors']}, Time: " . round( $batch_time, 2 ) . 's' );
 			}
 
 			$offset += $batch_size;
@@ -230,13 +230,13 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 
 		$total_time = microtime( true ) - $start_time;
 
-		WP_CLI::success( "Sync complete!" );
+		WP_CLI::success( 'Sync complete!' );
 		WP_CLI::log( "Total synced: {$total_synced}" );
 		WP_CLI::log( "Total errors: {$total_errors}" );
 		WP_CLI::log( "Batches processed: {$batch_count}" );
-		WP_CLI::log( "Total time: " . round( $total_time, 2 ) . " seconds" );
-		WP_CLI::log( "Average time per batch: " . round( $total_time / $batch_count, 2 ) . " seconds" );
-		WP_CLI::log( "Items per second: " . round( $total_synced / $total_time, 2 ) );
+		WP_CLI::log( 'Total time: ' . round( $total_time, 2 ) . ' seconds' );
+		WP_CLI::log( 'Average time per batch: ' . round( $total_time / $batch_count, 2 ) . ' seconds' );
+		WP_CLI::log( 'Items per second: ' . round( $total_synced / $total_time, 2 ) );
 	}
 
 	/**
@@ -302,14 +302,14 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 		foreach ( $posts as $post ) {
 			$term_id = get_post_meta( $post->ID, $post_meta_key, true );
 			if ( ! $term_id ) {
-				$posts_without_terms++;
+				++$posts_without_terms;
 				if ( $fix ) {
 					WP_CLI::log( "Post '{$post->post_title}' (ID: {$post->ID}) missing term link" );
 				}
 			} else {
 				$term = get_term( $term_id, $taxonomy_slug );
 				if ( ! $term || is_wp_error( $term ) ) {
-					$broken_links++;
+					++$broken_links;
 					if ( $fix ) {
 						delete_post_meta( $post->ID, $post_meta_key );
 						WP_CLI::log( "Removed broken link from post '{$post->post_title}' (ID: {$post->ID})" );
@@ -322,14 +322,14 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 		foreach ( $terms as $term ) {
 			$post_id = get_term_meta( $term->term_id, $term_meta_key, true );
 			if ( ! $post_id ) {
-				$terms_without_posts++;
+				++$terms_without_posts;
 				if ( $fix ) {
 					WP_CLI::log( "Term '{$term->name}' (ID: {$term->term_id}) missing post link" );
 				}
 			} else {
 				$post = get_post( $post_id );
 				if ( ! $post || $post->post_type !== $cpt_slug ) {
-					$broken_links++;
+					++$broken_links;
 					if ( $fix ) {
 						delete_term_meta( $term->term_id, $term_meta_key );
 						WP_CLI::log( "Removed broken link from term '{$term->name}' (ID: {$term->term_id})" );
@@ -344,12 +344,10 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 
 		if ( $posts_without_terms === 0 && $terms_without_posts === 0 && $broken_links === 0 ) {
 			WP_CLI::success( 'Sync integrity verified! All relationships are correct.' );
-		} else {
-			if ( $fix ) {
+		} elseif ( $fix ) {
 				WP_CLI::warning( 'Found issues and attempted fixes. Run verify again to confirm.' );
-			} else {
-				WP_CLI::warning( 'Found issues. Use --fix to attempt automatic fixes.' );
-			}
+		} else {
+			WP_CLI::warning( 'Found issues. Use --fix to attempt automatic fixes.' );
 		}
 	}
 
@@ -428,4 +426,3 @@ class CPT_Tax_Syncer_WP_CLI extends WP_CLI_Command {
 
 // Register the WP-CLI command.
 WP_CLI::add_command( 'cpt-tax-syncer', 'CPT_Tax_Syncer_WP_CLI' );
-
