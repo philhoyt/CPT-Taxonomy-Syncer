@@ -1,0 +1,30 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "cpt-tax-syncer/previous-post-relationship",
+	"version": "0.1.0",
+	"title": "Previous Post (Relationship)",
+	"category": "design",
+	"icon": "arrow-left-alt2",
+	"description": "Navigate to the previous post using custom relationship order.",
+	"example": {},
+	"attributes": {
+		"relationshipPair": {
+			"type": "string",
+			"default": ""
+		},
+		"useCustomOrder": {
+			"type": "boolean",
+			"default": true
+		},
+		"linkText": {
+			"type": "string",
+			"default": "Previous"
+		}
+	},
+	"supports": {
+		"html": false
+	},
+	"textdomain": "cpt-taxonomy-syncer",
+	"render": "file:./render.php"
+}

@@ -1,0 +1,30 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "cpt-tax-syncer/next-post-relationship",
+	"version": "0.1.0",
+	"title": "Next Post (Relationship)",
+	"category": "design",
+	"icon": "arrow-right-alt2",
+	"description": "Navigate to the next post using custom relationship order.",
+	"example": {},
+	"attributes": {
+		"relationshipPair": {
+			"type": "string",
+			"default": ""
+		},
+		"useCustomOrder": {
+			"type": "boolean",
+			"default": true
+		},
+		"linkText": {
+			"type": "string",
+			"default": "Next"
+		}
+	},
+	"supports": {
+		"html": false
+	},
+	"textdomain": "cpt-taxonomy-syncer",
+	"render": "file:./render.php"
+}

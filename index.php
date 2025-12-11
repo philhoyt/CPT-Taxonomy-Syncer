@@ -45,6 +45,7 @@ require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-adjacent-post-blocks.php';
 
 // Include WP-CLI commands if WP-CLI is available.
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -76,6 +77,9 @@ function cpt_taxonomy_syncer_init() {
 
 	// Initialize relationship query handler.
 	new CPT_Tax_Syncer_Relationship_Query();
+
+	// Initialize adjacent post blocks.
+	new CPT_Tax_Syncer_Adjacent_Post_Blocks();
 }
 
 // Register global REST API routes (only once).
