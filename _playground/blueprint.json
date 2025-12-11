@@ -15,7 +15,7 @@
 			"step": "installPlugin",
 			"pluginZipFile": {
 				"resource": "url",
-				"url": "https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/download/v1.1.0/cpt-taxonomy-syncer.zip"
+				"url": "https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/download/v1.2.0/cpt-taxonomy-syncer.zip"
 			},
 			"options": {
 				"activate": true
