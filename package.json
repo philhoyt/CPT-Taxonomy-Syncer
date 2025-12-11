@@ -4,10 +4,21 @@
 	"description": "Automatically syncs a custom post type with a taxonomy",
 	"author": "Phil Hoyt",
 	"license": "GPL-2.0-or-later",
+	"files": [
+		"index.php",
+		"uninstall.php",
+		"readme.txt",
+		"README.md",
+		"includes",
+		"assets",
+		"build"
+	],
 	"scripts": {
 		"build": "wp-scripts build",
 		"start": "wp-scripts start",
 		"packages-update": "wp-scripts packages-update",
+		"plugin-zip": "wp-scripts plugin-zip",
+		"package": "npm run build && npm run plugin-zip",
 		"lint:js": "wp-scripts lint-js",
 		"lint:js:fix": "wp-scripts lint-js --fix",
 		"lint:css": "wp-scripts lint-style",
