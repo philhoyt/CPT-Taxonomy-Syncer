@@ -88,7 +88,7 @@ npm run build
 
 ## Requirements
 
-- WordPress 6.0+
+- WordPress 6.7+
 - PHP 7.4+
 - Node.js 14+ (for building assets)
 
