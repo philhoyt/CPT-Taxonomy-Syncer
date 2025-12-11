@@ -40,6 +40,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	private static $current_query_context = null;
 
+
 	/**
 	 * Constructor
 	 */
@@ -51,7 +52,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 		add_filter( 'render_block', array( $this, 'render_relationship_block' ), 10, 2 );
 
 		// Register custom block attributes.
-		add_action( 'init', array( $this, 'register_block_attributes' ) );
+		add_action( 'init', array( $this, 'register_block_attributes' ), 20 );
 
 		// Enqueue block editor assets.
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_block_editor_assets' ) );
@@ -69,7 +70,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	public function register_block_attributes() {
 		// Add custom attributes to the Query Loop block.
-		add_filter( 'block_type_metadata', array( $this, 'add_query_block_attributes' ) );
+		add_filter( 'block_type_metadata', array( $this, 'add_query_block_attributes' ), 10, 1 );
 	}
 
 	/**
@@ -80,11 +81,15 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	public function add_query_block_attributes( $metadata ) {
 		if ( isset( $metadata['name'] ) && $metadata['name'] === 'core/query' ) {
+			if ( ! isset( $metadata['attributes'] ) ) {
+				$metadata['attributes'] = array();
+			}
 			$metadata['attributes']['cptTaxSyncerSettings'] = array(
 				'type'    => 'object',
 				'default' => array(),
 			);
 		}
+
 		return $metadata;
 	}
 
@@ -486,30 +491,5 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		// Combine ordered and unordered posts.
 		return array_merge( $ordered_posts, $unordered_posts );
-	}
-
-
-	/**
-	 * Get available post types for a given taxonomy
-	 *
-	 * @param string $taxonomy_slug The taxonomy slug.
-	 * @return array Array of post type objects
-	 */
-	public function get_post_types_for_taxonomy( $taxonomy_slug ) {
-		$taxonomy = get_taxonomy( $taxonomy_slug );
-
-		if ( ! $taxonomy ) {
-			return array();
-		}
-
-		$post_types = array();
-		foreach ( $taxonomy->object_type as $post_type_slug ) {
-			$post_type = get_post_type_object( $post_type_slug );
-			if ( $post_type ) {
-				$post_types[] = $post_type;
-			}
-		}
-
-		return $post_types;
 	}
 }
