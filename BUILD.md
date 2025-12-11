@@ -29,14 +29,45 @@ npm run build
 ```
 
 This will:
-- Compile JSX files from `assets/js/src/` to `assets/js/`
+- Compile JSX files from `src/js/` to `build/js/`
+- Compile block files from `src/blocks/` to `build/js/`
 - Minify and optimize the output
 - Generate source maps
+
+## Packaging for Distribution
+
+To create a zip file ready for distribution:
+
+```bash
+npm run package
+```
+
+Or separately:
+```bash
+npm run build
+npm run plugin-zip
+```
+
+This will:
+- Build all JavaScript assets
+- Create a zip file excluding development files (see `.distignore`)
+- Output: `cpt-taxonomy-syncer.zip` in the plugin root
+
+The `.distignore` file controls which files are excluded from the zip. It excludes:
+- Source files (`src/`)
+- Development dependencies (`node_modules/`, `vendor/`)
+- Development documentation and tools
+- IDE and OS-specific files
+- Build artifacts and logs
+
+**Note:** The `build/` directory is included in the zip as it contains the compiled JavaScript assets needed for the plugin to function.
 
 ## Available Scripts
 
 - `npm run build` - Build for production
 - `npm start` - Build and watch for changes (development)
+- `npm run plugin-zip` - Create a zip file of the plugin for distribution (excludes dev files)
+- `npm run package` - Build and create zip file in one command
 - `npm run lint:js` - Lint JavaScript files
 - `npm run lint:js:fix` - Fix JavaScript linting issues automatically
 - `npm run lint:css` - Lint CSS files
