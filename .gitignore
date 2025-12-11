@@ -36,3 +36,4 @@ yarn-error.log*
 *.zip
 !cpt-taxonomy-syncer.zip
 /vendor
+audit.md

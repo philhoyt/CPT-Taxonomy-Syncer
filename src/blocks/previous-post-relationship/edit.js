@@ -81,7 +81,7 @@ export default function Edit( { attributes, setAttributes } ) {
 			<div { ...useBlockProps() }>
 				{ relationshipPair ? (
 					<span className="wp-block-cpt-tax-syncer-previous-post-relationship__placeholder">
-						{ linkText || __( 'Previous', 'cpt-taxonomy-syncer' ) }
+						{ linkText || __( 'Previous:', 'cpt-taxonomy-syncer' ) }
 					</span>
 				) : (
 					<span className="wp-block-cpt-tax-syncer-previous-post-relationship__placeholder">

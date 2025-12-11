@@ -19,7 +19,7 @@
 		},
 		"linkText": {
 			"type": "string",
-			"default": "Next"
+			"default": "Next:"
 		}
 	},
 	"supports": {

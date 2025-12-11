@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $relationship_pair = $attributes['relationshipPair'] ?? '';
 $use_custom_order  = isset( $attributes['useCustomOrder'] ) ? (bool) $attributes['useCustomOrder'] : true;
-$link_text         = $attributes['linkText'] ?? __( 'Previous', 'cpt-taxonomy-syncer' );
+$link_text         = $attributes['linkText'] ?? __( 'Previous:', 'cpt-taxonomy-syncer' );
 
 // If no relationship pair selected, return empty.
 if ( empty( $relationship_pair ) ) {
