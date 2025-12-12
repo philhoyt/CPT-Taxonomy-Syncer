@@ -34,7 +34,7 @@ class CPT_Tax_Syncer_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 
 		// Add settings link on plugins page.
-		add_filter( 'plugin_action_links_' . plugin_basename( dirname( __DIR__ ) . '/index.php' ), array( $this, 'add_settings_link' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( dirname( __DIR__ ) . '/cpt-taxonomy-syncer.php' ), array( $this, 'add_settings_link' ) );
 
 		// Add admin columns for synced post types.
 		add_action( 'init', array( $this, 'add_admin_columns' ), 20 );

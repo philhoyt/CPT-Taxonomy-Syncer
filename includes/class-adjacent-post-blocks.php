@@ -38,13 +38,13 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 	 */
 	public function register_blocks() {
 		// Register Previous Post block.
-		$previous_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'src/blocks/previous-post-relationship';
+		$previous_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/blocks/previous-post-relationship';
 		if ( file_exists( $previous_block_path . '/block.json' ) ) {
 			register_block_type( $previous_block_path );
 		}
 
 		// Register Next Post block.
-		$next_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'src/blocks/next-post-relationship';
+		$next_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/blocks/next-post-relationship';
 		if ( file_exists( $next_block_path . '/block.json' ) ) {
 			register_block_type( $next_block_path );
 		}
@@ -338,4 +338,3 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 		return null;
 	}
 }
-
