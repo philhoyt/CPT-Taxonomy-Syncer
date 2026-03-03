@@ -26,6 +26,13 @@ class CPT_Tax_Syncer_REST_Controller {
 	private $namespace = 'cpt-tax-syncer/v1';
 
 	/**
+	 * Tracks whether instance-shared routes have been registered.
+	 *
+	 * @var bool
+	 */
+	private static $instance_routes_registered = false;
+
+	/**
 	 * Cache TTL for relationship queries (filterable).
 	 *
 	 * @return int Cache TTL in seconds.
@@ -56,21 +63,10 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * @param string $taxonomy Taxonomy slug.
 	 */
 	public static function invalidate_cache( $post_type = null, $taxonomy = null ) {
-		// If specific post type/taxonomy provided, invalidate only those.
-		if ( $post_type && $taxonomy ) {
-			// Invalidate all caches for this pair (both endpoints).
-			$patterns = array(
-				'cpt_tax_syncer_get_all_relationships_*',
-				'cpt_tax_syncer_get_post_type_relationships_*',
-			);
-
-			// Delete transients matching pattern (WordPress doesn't have wildcard delete, so we'll use a different approach).
-			// For now, we'll invalidate all relationship caches when any relationship changes.
-			// This is simpler and ensures consistency.
-		}
-
-		// Invalidate all relationship caches.
-		// WordPress doesn't support wildcard transient deletion, so we use a version-based approach.
+		// Increment the cache version to invalidate all relationship caches.
+		// WordPress doesn't support wildcard transient deletion, so a version-based
+		// approach is used: all cached keys include the version number, so bumping it
+		// effectively expires every cached response at once.
 		$cache_version = get_option( 'cpt_tax_syncer_cache_version', 1 );
 		update_option( 'cpt_tax_syncer_cache_version', $cache_version + 1, false );
 	}
@@ -139,7 +135,14 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * Register REST API routes
 	 */
 	public function register_routes() {
+		// Guard: all instance-shared routes are registered only once across all instances.
+		if ( self::$instance_routes_registered ) {
+			return;
+		}
+		self::$instance_routes_registered = true;
+
 		// Register endpoint for creating a term and syncing to post.
+		// cpt_slug and taxonomy_slug params allow the caller to target any configured pair.
 		register_rest_route(
 			$this->namespace,
 			'/create-term',
@@ -148,11 +151,17 @@ class CPT_Tax_Syncer_REST_Controller {
 				'callback'            => array( $this, 'create_term' ),
 				'permission_callback' => array( $this, 'check_permission' ),
 				'args'                => array(
-					'name'        => array(
+					'name'          => array(
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_text_field',
 					),
-					'description' => array(
+					'description'   => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'cpt_slug'      => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy_slug' => array(
 						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
@@ -160,6 +169,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		);
 
 		// Register endpoint for creating a post and syncing to term.
+		// cpt_slug and taxonomy_slug params allow the caller to target any configured pair.
 		register_rest_route(
 			$this->namespace,
 			'/create-post',
@@ -168,12 +178,18 @@ class CPT_Tax_Syncer_REST_Controller {
 				'callback'            => array( $this, 'create_post' ),
 				'permission_callback' => array( $this, 'check_permission' ),
 				'args'                => array(
-					'title'   => array(
+					'title'         => array(
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_text_field',
 					),
-					'content' => array(
+					'content'       => array(
 						'sanitize_callback' => 'wp_kses_post',
+					),
+					'cpt_slug'      => array(
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'taxonomy_slug' => array(
+						'sanitize_callback' => 'sanitize_text_field',
 					),
 				),
 			)
@@ -434,7 +450,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			// Prepare query with post IDs and meta key.
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
 			$prepared = $wpdb->prepare( $query, array_merge( $posts, array( $meta_key ) ) );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bulk query; $prepared is the output of $wpdb->prepare().
 			$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
 
 			// Build lookup array: post_id => term_id.
@@ -647,7 +663,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			AND (meta_key = %s OR meta_key = %s)";
 
 		// Prepare query with post IDs and meta keys.
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- $query uses %d/%s placeholders; prepare() handles sanitisation.
 		$prepared = $wpdb->prepare(
 			$query,
 			array_merge(
@@ -658,8 +674,9 @@ class CPT_Tax_Syncer_REST_Controller {
 				)
 			)
 		);
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query; $prepared is the output of $wpdb->prepare().
 		$meta_values = $wpdb->get_results( $prepared, ARRAY_A );
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
 		// Build lookup arrays: post_id => term_id, post_id => order array.
 		$post_to_term_map  = array();
@@ -741,13 +758,14 @@ class CPT_Tax_Syncer_REST_Controller {
 					AND tt.taxonomy = %s
 					AND tt.term_id IN ($term_placeholders)";
 
-				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Query is prepared with placeholders.
+				// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- \$term_rel_query uses %d/%s placeholders; prepare() handles sanitisation.
 				$term_rel_prepared = $wpdb->prepare(
 					$term_rel_query,
 					array_merge( $related_post_ids, array( $taxonomy ), $unique_term_ids )
 				);
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query for performance.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk query; \$term_rel_prepared is the output of \$wpdb->prepare().
 				$term_relationships = $wpdb->get_results( $term_rel_prepared, ARRAY_A );
+				// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
 				// Build lookup: term_id => array of posts.
 				$related_posts_by_id = array();
@@ -928,8 +946,12 @@ class CPT_Tax_Syncer_REST_Controller {
 			$description = '';
 		}
 
+		// Resolve target taxonomy from request params, falling back to instance value.
+		$param_taxonomy = $request->get_param( 'taxonomy_slug' );
+		$taxonomy_slug  = ! empty( $param_taxonomy ) ? $param_taxonomy : $this->taxonomy_slug;
+
 		// Check if a term with this name already exists.
-		$existing_term = get_term_by( 'name', $name, $this->taxonomy_slug );
+		$existing_term = get_term_by( 'name', $name, $taxonomy_slug );
 		if ( $existing_term ) {
 			return new WP_REST_Response(
 				array(
@@ -944,7 +966,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		// Create the term.
 		$result = wp_insert_term(
 			$name,
-			$this->taxonomy_slug,
+			$taxonomy_slug,
 			array(
 				'description' => $description,
 			)
@@ -955,7 +977,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		}
 
 		// Get the created term with all fields.
-		$term = get_term( $result['term_id'], $this->taxonomy_slug );
+		$term = get_term( $result['term_id'], $taxonomy_slug );
 
 		// The term creation hook will handle syncing to post.
 
@@ -983,19 +1005,23 @@ class CPT_Tax_Syncer_REST_Controller {
 			$content = '';
 		}
 
+		// Resolve target CPT from request params, falling back to instance value.
+		$param_cpt = $request->get_param( 'cpt_slug' );
+		$cpt_slug  = ! empty( $param_cpt ) ? $param_cpt : $this->cpt_slug;
+
 		// Check if a post with this title already exists.
 		// Use direct SQL query since WP_Query doesn't support title parameter.
 		global $wpdb;
 
 		$post_id = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT ID FROM {$wpdb->posts} 
-				WHERE post_title = %s 
-				AND post_type = %s 
-				AND post_status = %s 
+				"SELECT ID FROM {$wpdb->posts}
+				WHERE post_title = %s
+				AND post_type = %s
+				AND post_status = %s
 				LIMIT 1",
 				$title,
-				$this->cpt_slug,
+				$cpt_slug,
 				CPT_TAX_SYNCER_DEFAULT_POST_STATUS
 			)
 		);
@@ -1018,7 +1044,7 @@ class CPT_Tax_Syncer_REST_Controller {
 				'post_title'   => $title,
 				'post_content' => $content,
 				'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-				'post_type'    => $this->cpt_slug,
+				'post_type'    => $cpt_slug,
 			)
 		);
 

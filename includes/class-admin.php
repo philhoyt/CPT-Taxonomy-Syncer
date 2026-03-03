@@ -223,23 +223,23 @@ class CPT_Tax_Syncer_Admin {
 		$taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
 		?>
 		<div class="wrap">
-			<h1>CPT-Taxonomy Syncer Settings</h1>
-			
+			<h1><?php esc_html_e( 'CPT-Taxonomy Syncer Settings', 'cpt-taxonomy-syncer' ); ?></h1>
+
 			<form method="post" action="options.php">
 				<?php settings_fields( 'cpt_tax_syncer_settings' ); ?>
 				<?php do_settings_sections( 'cpt_tax_syncer_settings' ); ?>
-				
-				<h2>CPT-Taxonomy Pairs</h2>
-				
-				<p>Configure the custom post types and taxonomies that should be synced.</p>
-				
+
+				<h2><?php esc_html_e( 'CPT-Taxonomy Pairs', 'cpt-taxonomy-syncer' ); ?></h2>
+
+				<p><?php esc_html_e( 'Configure the custom post types and taxonomies that should be synced.', 'cpt-taxonomy-syncer' ); ?></p>
+
 				<table class="widefat" id="cpt-tax-pairs">
 					<thead>
 						<tr>
-							<th>Custom Post Type</th>
-							<th>Taxonomy</th>
-							<th>Redirect Archive</th>
-							<th>Actions</th>
+							<th><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Actions', 'cpt-taxonomy-syncer' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -293,16 +293,16 @@ class CPT_Tax_Syncer_Admin {
 			</form>
 			
 			<?php if ( ! empty( $pairs ) ) : ?>
-				<h2>Manual Sync</h2>
-				<p>Use these buttons to manually sync your post types and taxonomies.</p>
-				
+				<h2><?php esc_html_e( 'Manual Sync', 'cpt-taxonomy-syncer' ); ?></h2>
+				<p><?php esc_html_e( 'Use these buttons to manually sync your post types and taxonomies.', 'cpt-taxonomy-syncer' ); ?></p>
+
 				<table class="widefat" style="margin-top: 20px;">
 					<thead>
 						<tr>
-							<th>Custom Post Type</th>
-							<th>Taxonomy</th>
-							<th>Redirect Archive</th>
-							<th>Actions</th>
+							<th><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></th>
+							<th><?php esc_html_e( 'Actions', 'cpt-taxonomy-syncer' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -313,10 +313,10 @@ class CPT_Tax_Syncer_Admin {
 								<td><?php echo isset( $pair['enable_redirect'] ) && $pair['enable_redirect'] ? esc_html__( 'Yes', 'cpt-taxonomy-syncer' ) : esc_html__( 'No', 'cpt-taxonomy-syncer' ); ?></td>
 								<td>
 									<button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr( $pair['cpt_slug'] ); ?>" data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>">
-										Sync Posts to Terms
+										<?php esc_html_e( 'Sync Posts to Terms', 'cpt-taxonomy-syncer' ); ?>
 									</button>
 									<button type="button" class="button sync-terms-to-posts" data-cpt="<?php echo esc_attr( $pair['cpt_slug'] ); ?>" data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>">
-										Sync Terms to Posts
+										<?php esc_html_e( 'Sync Terms to Posts', 'cpt-taxonomy-syncer' ); ?>
 									</button>
 								</td>
 							</tr>
@@ -753,8 +753,17 @@ class CPT_Tax_Syncer_Admin {
 				);
 				?>
 			</p>
-			<div 
-				id="cpt-tax-post-type-relationships-dashboard" 
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: Meta key name */
+					esc_html__( 'Custom order meta key: %s', 'cpt-taxonomy-syncer' ),
+					'<code>_cpt_tax_syncer_relationship_order_' . esc_html( $pair['taxonomy_slug'] ) . '</code>'
+				);
+				?>
+			</p>
+			<div
+				id="cpt-tax-post-type-relationships-dashboard"
 				data-post-type="<?php echo esc_attr( $post_type ); ?>"
 				data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>"
 			></div>

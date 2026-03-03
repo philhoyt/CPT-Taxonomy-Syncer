@@ -50,18 +50,18 @@ class CPT_Taxonomy_Syncer {
 	private static $instances = array();
 
 	/**
-	 * Flag to prevent infinite recursion during deletion
+	 * Flag to prevent infinite recursion during deletion (per instance, not shared)
 	 *
 	 * @var bool
 	 */
-	private static $is_deleting = false;
+	private $is_deleting = false;
 
 	/**
-	 * Flag to prevent infinite recursion during updates
+	 * Flag to prevent infinite recursion during updates (per instance, not shared)
 	 *
 	 * @var bool
 	 */
-	private static $is_updating = false;
+	private $is_updating = false;
 
 	/**
 	 * Array of term IDs that are being created from posts (to prevent reverse sync)
@@ -464,7 +464,7 @@ class CPT_Taxonomy_Syncer {
 	 */
 	public function sync_post_update_to_term( $post_id, $post_after, $post_before ) {
 		// Prevent infinite recursion.
-		if ( self::$is_updating ) {
+		if ( $this->is_updating ) {
 			return;
 		}
 
@@ -481,12 +481,29 @@ class CPT_Taxonomy_Syncer {
 		// Check if the title has changed.
 		if ( $post_after->post_title !== $post_before->post_title ) {
 			// Set the update flag to prevent recursion.
-			self::$is_updating = true;
+			$this->is_updating = true;
 
-			// Find the corresponding term by the old title.
-			$term = get_term_by( 'name', $post_before->post_title, $this->taxonomy_slug );
+			// Find the linked term via post meta first (authoritative link).
+			$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
+			$linked_term_id = get_post_meta( $post_id, $meta_key, true );
+			$term           = null;
 
-			if ( $term && ! is_wp_error( $term ) ) {
+			if ( $linked_term_id ) {
+				$term = get_term( $linked_term_id, $this->taxonomy_slug );
+				if ( is_wp_error( $term ) ) {
+					$term = null;
+				}
+			}
+
+			// Fallback: find by old title if no meta relationship exists.
+			if ( ! $term ) {
+				$term = get_term_by( 'name', $post_before->post_title, $this->taxonomy_slug );
+				if ( is_wp_error( $term ) ) {
+					$term = null;
+				}
+			}
+
+			if ( $term ) {
 				// Update the term.
 				wp_update_term(
 					$term->term_id,
@@ -503,11 +520,13 @@ class CPT_Taxonomy_Syncer {
 				if ( ! is_wp_error( $result ) ) {
 					// Store post ID as term meta for future reference.
 					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
+					// Store term ID as post meta for future reference.
+					update_post_meta( $post_id, $meta_key, $result['term_id'] );
 				}
 			}
 
 			// Reset the update flag.
-			self::$is_updating = false;
+			$this->is_updating = false;
 		}
 	}
 
@@ -519,7 +538,7 @@ class CPT_Taxonomy_Syncer {
 	 */
 	public function sync_term_update_to_post( $term_id, $tt_id ) {
 		// Prevent infinite recursion.
-		if ( self::$is_updating ) {
+		if ( $this->is_updating ) {
 			return;
 		}
 
@@ -534,7 +553,7 @@ class CPT_Taxonomy_Syncer {
 		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
 
 		// Set the update flag to prevent recursion.
-		self::$is_updating = true;
+		$this->is_updating = true;
 
 		if ( $post_id ) {
 			// Update the post.
@@ -572,7 +591,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Reset the update flag.
-		self::$is_updating = false;
+		$this->is_updating = false;
 	}
 
 	/**
@@ -582,7 +601,7 @@ class CPT_Taxonomy_Syncer {
 	 */
 	public function sync_post_deletion_to_term( $post_id ) {
 		// Prevent infinite recursion.
-		if ( self::$is_deleting ) {
+		if ( $this->is_deleting ) {
 			return;
 		}
 
@@ -592,7 +611,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Set the deletion flag.
-		self::$is_deleting = true;
+		$this->is_deleting = true;
 
 		// Find the corresponding term using the meta relationship (most reliable).
 		// This works even when term names are modified for duplicate titles.
@@ -631,7 +650,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Reset the deletion flag.
-		self::$is_deleting = false;
+		$this->is_deleting = false;
 	}
 
 	/**
@@ -642,7 +661,7 @@ class CPT_Taxonomy_Syncer {
 	 */
 	public function sync_term_deletion_to_post( $term_id, $taxonomy ) {
 		// Prevent infinite recursion.
-		if ( self::$is_deleting ) {
+		if ( $this->is_deleting ) {
 			return;
 		}
 
@@ -652,7 +671,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Set the deletion flag.
-		self::$is_deleting = true;
+		$this->is_deleting = true;
 
 		// Get the associated post ID from term meta.
 		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
@@ -663,7 +682,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Reset the deletion flag.
-		self::$is_deleting = false;
+		$this->is_deleting = false;
 	}
 
 	/**
@@ -832,10 +851,12 @@ class CPT_Taxonomy_Syncer {
 				}
 			} else {
 				// Check if meta relationship already exists and is correct.
-				$existing_linked_post_id = isset( $term_meta_by_post_id[ $post->ID ] ) ? $term_meta_by_post_id[ $post->ID ] : null;
+				// $term_meta_by_post_id maps post ID => term ID, so this is the term ID
+				// currently linked to this post (or null if none).
+				$existing_linked_term_id = isset( $term_meta_by_post_id[ $post->ID ] ) ? $term_meta_by_post_id[ $post->ID ] : null;
 
 				// Only update if the relationship doesn't exist or is different.
-				if ( $existing_linked_post_id !== $term->term_id ) {
+				if ( $existing_linked_term_id !== $term->term_id ) {
 					update_term_meta( $term->term_id, $meta_key, $post->ID );
 					$term_meta_by_post_id[ $post->ID ] = $term->term_id;
 				}

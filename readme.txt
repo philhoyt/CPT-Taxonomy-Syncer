@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, block-editor, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -108,6 +108,16 @@ When you delete a synced post, the corresponding term is automatically deleted (
 
 == Changelog ==
 
+= 1.3.0 =
+* Fixed critical `uninstall.php` fatal error caused by an undefined constant
+* Fixed duplicate REST route registrations when multiple CPT-taxonomy pairs are configured
+* Fixed `sync_post_update_to_term()` ignoring the authoritative post meta relationship, causing sync failures when term names were modified by conflict resolution
+* Fixed shared static `$is_deleting`/`$is_updating` flags causing multi-pair sync lockout
+* Fixed `get_post_type_relationships()` returning posts from unrelated post types sharing the same taxonomy
+* Fixed unescaped `$wrapper_attributes` output in block render templates
+* Corrected dead code block in `invalidate_cache()`, misleading variable name in `bulk_sync_posts_to_terms()`, and unlocalized admin UI strings
+* Full PHPCS and ESLint linting pass with zero errors
+
 = 1.2.0 =
 * **Custom Ordering System**: Drag-and-drop interface for reordering related posts per relationship
 * **Relationships Dashboard**: Per post-type dashboard (e.g., Posts → Relationships) showing parent-to-child relationships with visual ordering interface
@@ -154,6 +164,9 @@ When you delete a synced post, the corresponding term is automatically deleted (
 * REST API endpoints for batch processing
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Bug-fix release addressing critical and high-severity issues found during code audit. Fixes a fatal error on uninstall, duplicate REST route registrations with multiple pairs, sync failures after term name conflict resolution, and multi-pair sync lockout. Upgrade recommended for all users.
 
 = 1.2.0 =
 Performance-focused update with significant improvements to query efficiency, caching system, and developer extensibility. New hooks allow developers to customize sync behavior. All existing functionality remains compatible.

@@ -1,6 +1,6 @@
 # CPT-Taxonomy Syncer
 
-[![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.2.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
+[![Playground Demo Link](https://img.shields.io/badge/Playground_Demo-v1.3.0-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%233858e9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
 
 A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
 
@@ -86,6 +86,19 @@ npm run build
 ```
 
 ## Changelog
+
+### 1.3.0
+
+- Fixed critical `uninstall.php` fatal error caused by an undefined constant
+- Fixed duplicate REST route registrations when multiple CPT-taxonomy pairs are configured
+- Fixed `sync_post_update_to_term()` ignoring the authoritative post meta relationship
+- Fixed shared static `$is_deleting`/`$is_updating` flags breaking multi-pair sync
+- Fixed `get_post_type_relationships()` returning posts from unrelated post types
+- Fixed unescaped `$wrapper_attributes` output in block render templates
+- Replaced nested ternary in Relationships Dashboard with a readable variable
+- Removed unused `SelectControl` import from Relationship Query Loop variation
+- Added missing `@package` tags and corrected inline comment style in render templates
+- Full linting pass: zero PHPCS errors, zero ESLint errors
 
 ### 1.2.0
 - **Custom Ordering System**: Drag-and-drop interface for reordering related posts per relationship

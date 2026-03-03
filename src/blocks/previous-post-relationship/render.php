@@ -8,6 +8,8 @@
  *     $block (WP_Block): The block instance.
  *
  * @see https://github.com/WordPress/gutenberg/blob/trunk/docs/reference-guides/block-api/block-metadata.md#render
+ *
+ * @package CPT_Taxonomy_Syncer
  */
 
 // Exit if accessed directly.
@@ -44,7 +46,7 @@ $adjacent_post = CPT_Tax_Syncer_Adjacent_Post_Blocks::get_adjacent_post(
 	$post->ID,
 	$cpt_slug,
 	$taxonomy_slug,
-	true, // is_previous
+	true, // is_previous=true means previous post.
 	$use_custom_order
 );
 
@@ -64,7 +66,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 );
 ?>
 
-<div <?php echo $wrapper_attributes; ?>>
+<div <?php echo wp_kses_post( $wrapper_attributes ); ?>>
 	<a href="<?php echo esc_url( $adjacent_url ); ?>" rel="prev">
 		<?php echo esc_html( $link_text ); ?>
 		<?php if ( ! empty( $adjacent_title ) ) : ?>

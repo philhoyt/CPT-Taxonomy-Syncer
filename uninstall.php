@@ -11,7 +11,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 // Delete plugin options.
-delete_option( CPT_TAX_SYNCER_OPTION_NAME );
+delete_option( 'cpt_tax_syncer_pairs' );
 
 // Delete legacy option (from unused admin/settings.php if it exists).
 delete_option( 'cpt_taxonomy_syncer_pairs' );

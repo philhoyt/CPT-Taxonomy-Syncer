@@ -184,9 +184,9 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 
 				if ( is_array( $order ) && ! empty( $order ) ) {
 					// Ensure order contains integers for comparison.
-					$order = array_map( 'absint', $order );
+					$order               = array_map( 'absint', $order );
 					$current_post_id_int = absint( $current_post_id );
-					$current_position = array_search( $current_post_id_int, $order, true );
+					$current_position    = array_search( $current_post_id_int, $order, true );
 
 					if ( false !== $current_position ) {
 						// This parent has a custom order including the current post.
