@@ -37,9 +37,11 @@ A WordPress plugin that automatically syncs Post Types with Taxonomies, creating
 
 ## Installation
 
-1. Upload the plugin folder to `/wp-content/plugins/`
-2. Activate through **Plugins → Installed Plugins**
-3. Configure at **Tools → CPT-Tax Syncer**
+1. Download the latest `cpt-taxonomy-syncer.zip` from the [GitHub Releases page](https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/latest)
+2. In your WordPress admin, go to **Plugins → Add New Plugin**
+3. Click **Upload Plugin** and select the downloaded `.zip` file
+4. Click **Install Now**, then **Activate Plugin**
+5. Configure at **Tools → CPT-Tax Syncer**
 
 ## Usage
 
