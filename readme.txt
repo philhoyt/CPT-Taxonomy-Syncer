@@ -90,6 +90,14 @@ These are custom blocks that provide navigation between posts based on your rela
 
 The plugin handles duplicate titles by creating unique term names. For example, if you have two posts titled "Comedy", the second one will create a term named "Comedy (slug)" or "Comedy (ID: 123)" to ensure uniqueness.
 
+= What happens to my data when I uninstall the plugin? =
+
+The plugin's settings (your configured sync pairs) are deleted on uninstall. However, the relationship meta fields stored on posts and terms — such as `_cpt_tax_syncer_term_{taxonomy}` and `_cpt_tax_syncer_post_{cpt}` — are intentionally **preserved**. This means your existing relationships remain intact if you reinstall the plugin, and any external code querying those meta fields will continue to work.
+
+If you want to remove the relationship meta entirely, use WP-CLI before uninstalling:
+
+`wp cpt-tax-syncer cleanup <cpt_slug> <taxonomy_slug>`
+
 = Can I disable syncing temporarily? =
 
 Yes, you can remove a sync pair from the settings page. This will stop automatic syncing but will not delete existing relationships or data.
