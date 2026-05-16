@@ -103,7 +103,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		if ( ! file_exists( $script_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'CPT-Tax Syncer: JavaScript file not found at ' . $script_path );
+				error_log( 'CPT-Tax Syncer: JavaScript file not found: ' . wp_basename( $script_path ) );
 			}
 			return;
 		}

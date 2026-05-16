@@ -4,11 +4,9 @@
  * Displays parent-to-child relationships with drag-and-drop ordering
  */
 
-import { useState, useEffect, Fragment } from '@wordpress/element';
+import { useState, useEffect, Fragment, createRoot } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { __ } from '@wordpress/i18n';
-
-const { createRoot } = wp.element;
 
 function PostTypeRelationshipsDashboard( { postType, taxonomy } ) {
 	const [ loading, setLoading ] = useState( true );

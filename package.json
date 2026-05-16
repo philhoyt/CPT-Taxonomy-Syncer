@@ -28,12 +28,12 @@
 		"format:css": "wp-scripts format-style"
 	},
 	"devDependencies": {
-		"@wordpress/scripts": "^27.0.0"
+		"@wordpress/scripts": "^32.0.0"
 	},
 	"dependencies": {
-		"@wordpress/api-fetch": "^6.0.0",
-		"@wordpress/element": "^5.0.0",
-		"@wordpress/i18n": "^4.0.0"
+		"@wordpress/api-fetch": "^7.0.0",
+		"@wordpress/element": "^6.0.0",
+		"@wordpress/i18n": "^5.0.0"
 	}
 }
 

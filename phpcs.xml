@@ -20,7 +20,7 @@
     <arg name="parallel" value="8"/>
 
     <!-- Rules: WordPress Coding Standards -->
-    <config name="minimum_supported_wp_version" value="6.6"/>
+    <config name="minimum_supported_wp_version" value="6.0"/>
     
     <!-- Include WordPress standards -->
     <rule ref="WordPress">

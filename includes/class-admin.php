@@ -208,7 +208,7 @@ class CPT_Tax_Syncer_Admin {
 	 * @return array Modified plugin action links
 	 */
 	public function add_settings_link( $links ) {
-		$settings_link = '<a href="' . admin_url( 'tools.php?page=cpt-taxonomy-syncer' ) . '">' . __( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
+		$settings_link = '<a href="' . esc_url( admin_url( 'tools.php?page=cpt-taxonomy-syncer' ) ) . '">' . esc_html__( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
 	}
