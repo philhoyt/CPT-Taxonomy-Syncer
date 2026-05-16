@@ -103,7 +103,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		if ( ! file_exists( $script_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'CPT-Tax Syncer: JavaScript file not found: ' . wp_basename( $script_path ) );
+				error_log( 'CPT-Tax Syncer: JavaScript file not found: ' . wp_basename( $script_path ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			}
 			return;
 		}
@@ -256,7 +256,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 * @param int      $page The page number.
 	 * @return array Modified query variables
 	 */
-	public function modify_query_vars( $query_vars, $block, $page ) {
+	public function modify_query_vars( $query_vars, $block, $page ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Get settings from query object (original way).
 		$query_attrs     = $block->context['query'] ?? $block->attributes['query'] ?? array();
 		$syncer_settings = array();
@@ -383,7 +383,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 		}
 
 		// Add taxonomy query to find posts assigned to the same term.
-		$query_vars['tax_query'] = array(
+		$query_vars['tax_query'] = array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 			array(
 				'taxonomy' => $pair['taxonomy_slug'],
 				'field'    => 'term_id',

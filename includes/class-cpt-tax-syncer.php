@@ -229,7 +229,7 @@ class CPT_Taxonomy_Syncer {
 	 * @param WP_Post $post The post object.
 	 * @param bool    $update Whether this is an update (unused but required by hook signature).
 	 */
-	public function sync_post_to_term( $post_id, $post, $update ) {
+	public function sync_post_to_term( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Skip auto-drafts and revisions.
 		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || $post->post_status === 'auto-draft' ) {
 			return;
@@ -352,7 +352,7 @@ class CPT_Taxonomy_Syncer {
 	 * @param int $term_id The term ID.
 	 * @param int $tt_id   The term taxonomy ID (unused).
 	 */
-	public function sync_term_to_post( $term_id, $tt_id ) {
+	public function sync_term_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Skip if this term was created from a post (prevents reverse sync creating duplicate posts).
 		if ( isset( self::$terms_created_from_posts[ $term_id ] ) ) {
 			// Check if meta is set - if so, clean up flag. If not, it will be set soon.
@@ -536,7 +536,7 @@ class CPT_Taxonomy_Syncer {
 	 * @param int $term_id The term ID.
 	 * @param int $tt_id The term taxonomy ID.
 	 */
-	public function sync_term_update_to_post( $term_id, $tt_id ) {
+	public function sync_term_update_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Prevent infinite recursion.
 		if ( $this->is_updating ) {
 			return;
@@ -568,7 +568,7 @@ class CPT_Taxonomy_Syncer {
 			// Check for errors (though wp_update_post returns post ID or WP_Error).
 			if ( is_wp_error( $result ) && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				// Log error in debug mode.
-				error_log( 'CPT-Tax Syncer: Failed to update post ' . $post_id . ': ' . $result->get_error_message() );
+				error_log( 'CPT-Tax Syncer: Failed to update post ' . $post_id . ': ' . $result->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			}
 		} else {
 			// No associated post, create one.
@@ -690,7 +690,7 @@ class CPT_Taxonomy_Syncer {
 	 *
 	 * @param int $object_id Post or term ID.
 	 */
-	public function invalidate_relationship_cache( $object_id ) {
+	public function invalidate_relationship_cache( $object_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
 	}
 
@@ -1020,7 +1020,7 @@ class CPT_Taxonomy_Syncer {
 				'post_type'      => $this->cpt_slug,
 				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
 				'posts_per_page' => 1,
-				'meta_query'     => array(
+				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 					array(
 						'key'   => $meta_key,
 						'value' => $term_id,
@@ -1056,7 +1056,7 @@ class CPT_Taxonomy_Syncer {
 		global $wpdb;
 
 		// Use direct SQL query to find post by exact title.
-		$post_id = $wpdb->get_var(
+		$post_id = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts} 
 				WHERE post_title = %s 

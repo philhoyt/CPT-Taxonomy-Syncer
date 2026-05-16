@@ -62,7 +62,7 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * @param string $post_type Post type slug.
 	 * @param string $taxonomy Taxonomy slug.
 	 */
-	public static function invalidate_cache( $post_type = null, $taxonomy = null ) {
+	public static function invalidate_cache( $post_type = null, $taxonomy = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Increment the cache version to invalidate all relationship caches.
 		// WordPress doesn't support wildcard transient deletion, so a version-based
 		// approach is used: all cached keys include the version number, so bumping it
@@ -620,7 +620,7 @@ class CPT_Tax_Syncer_REST_Controller {
 			'post_type'      => $post_type,
 			'posts_per_page' => $max_posts_per_query,
 			'post_status'    => 'any',
-			'meta_query'     => array(
+			'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 				array(
 					'key'     => $meta_key,
 					'compare' => 'EXISTS',
@@ -732,7 +732,7 @@ class CPT_Tax_Syncer_REST_Controller {
 					'post_status'    => 'any',
 					'orderby'        => 'menu_order',
 					'order'          => 'ASC',
-					'tax_query'      => array(
+					'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 						array(
 							'taxonomy' => $taxonomy,
 							'field'    => 'term_id',
@@ -1013,7 +1013,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		// Use direct SQL query since WP_Query doesn't support title parameter.
 		global $wpdb;
 
-		$post_id = $wpdb->get_var(
+		$post_id = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts}
 				WHERE post_title = %s
@@ -1195,6 +1195,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		if ( empty( $taxonomy_slug ) ) {
 			$taxonomy_slug = $this->taxonomy_slug;
 		}
+		// phpcs:ignore Squiz.PHP.CommentedOutCode.Found -- operation mode string, not commented-out code.
 		// 'posts-to-terms' or 'terms-to-posts'.
 		$operation = $request->get_param( 'operation' );
 
@@ -1416,7 +1417,7 @@ class CPT_Tax_Syncer_REST_Controller {
 	 * @param WP_REST_Request  $request The request object (unused but required by filter signature).
 	 * @return WP_REST_Response The modified response
 	 */
-	public function prepare_term_response( $response, $term, $request ) {
+	public function prepare_term_response( $response, $term, $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Since we now know the CPT and taxonomy have different slugs,
 		// we don't need extensive workarounds here anymore.
 		// Just ensure the ID is an integer for consistency.

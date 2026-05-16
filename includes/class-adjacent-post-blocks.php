@@ -173,7 +173,7 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 					'post_type'      => $cpt_slug,
 					'posts_per_page' => 1,
 					'post_status'    => 'publish',
-					'meta_query'     => array(
+					'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 						array(
 							'key'   => $parent_meta_key,
 							'value' => $term_id,
@@ -239,7 +239,7 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 					'post_type'      => get_post_type( $current_post_id ),
 					'posts_per_page' => -1,
 					'post_status'    => 'publish',
-					'tax_query'      => array(
+					'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 						array(
 							'taxonomy' => $taxonomy_slug,
 							'field'    => 'term_id',
@@ -304,7 +304,7 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 					'post_status'    => 'publish',
 					'orderby'        => 'menu_order',
 					'order'          => 'ASC',
-					'tax_query'      => array(
+					'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 						array(
 							'taxonomy' => $taxonomy_slug,
 							'field'    => 'term_id',
