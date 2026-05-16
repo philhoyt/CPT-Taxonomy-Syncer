@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, block-editor, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -115,6 +115,15 @@ When you delete a synced post, the corresponding term is automatically deleted (
 5. Linked post information on term edit page
 
 == Changelog ==
+
+= 1.4.0 =
+* Added Plugin Update Checker to deliver automatic updates via GitHub releases
+* Added CI workflow for automated linting and build checks on pull requests
+* Replaced `wp_localize_script` with `wp_add_inline_script` in admin script registration
+* Fixed escaping warnings in JSX and PHP audit pass
+* Removed dead `view.js` stubs from block registration
+* Removed unused parameters from `invalidate_cache()` and corrected a misleading false-positive comment
+* Full PHPCS linting pass with zero errors
 
 = 1.3.0 =
 * Fixed critical `uninstall.php` fatal error caused by an undefined constant
