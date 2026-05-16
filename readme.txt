@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, block-editor, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -115,6 +115,9 @@ When you delete a synced post, the corresponding term is automatically deleted (
 5. Linked post information on term edit page
 
 == Changelog ==
+
+= 1.4.1 =
+* Security: Tighten REST permission callback to per-post capability check.
 
 = 1.4.0 =
 * Added Plugin Update Checker to deliver automatic updates via GitHub releases
