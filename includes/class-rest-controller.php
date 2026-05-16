@@ -57,12 +57,9 @@ class CPT_Tax_Syncer_REST_Controller {
 	}
 
 	/**
-	 * Invalidate cache for a specific post type and taxonomy.
-	 *
-	 * @param string $post_type Post type slug.
-	 * @param string $taxonomy Taxonomy slug.
+	 * Invalidate all relationship caches by bumping the global cache version.
 	 */
-	public static function invalidate_cache( $post_type = null, $taxonomy = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+	public static function invalidate_cache() {
 		// Increment the cache version to invalidate all relationship caches.
 		// WordPress doesn't support wildcard transient deletion, so a version-based
 		// approach is used: all cached keys include the version number, so bumping it
@@ -1195,8 +1192,7 @@ class CPT_Tax_Syncer_REST_Controller {
 		if ( empty( $taxonomy_slug ) ) {
 			$taxonomy_slug = $this->taxonomy_slug;
 		}
-		// phpcs:ignore Squiz.PHP.CommentedOutCode.Found -- operation mode string, not commented-out code.
-		// 'posts-to-terms' or 'terms-to-posts'.
+		// Valid values: posts-to-terms, terms-to-posts.
 		$operation = $request->get_param( 'operation' );
 
 		if ( ! $operation || ! in_array( $operation, array( 'posts-to-terms', 'terms-to-posts' ), true ) ) {

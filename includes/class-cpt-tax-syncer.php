@@ -691,7 +691,7 @@ class CPT_Taxonomy_Syncer {
 	 * @param int $object_id Post or term ID.
 	 */
 	public function invalidate_relationship_cache( $object_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-		CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+		CPT_Tax_Syncer_REST_Controller::invalidate_cache();
 	}
 
 	/**
@@ -702,7 +702,7 @@ class CPT_Taxonomy_Syncer {
 	public function invalidate_relationship_cache_on_delete( $post_id ) {
 		// Only invalidate if it's our CPT.
 		if ( get_post_type( $post_id ) === $this->cpt_slug ) {
-			CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+			CPT_Tax_Syncer_REST_Controller::invalidate_cache();
 		}
 	}
 
@@ -715,7 +715,7 @@ class CPT_Taxonomy_Syncer {
 	public function invalidate_relationship_cache_on_term_delete( $term_id, $taxonomy ) {
 		// Only invalidate if it's our taxonomy.
 		if ( $taxonomy === $this->taxonomy_slug ) {
-			CPT_Tax_Syncer_REST_Controller::invalidate_cache( $this->cpt_slug, $this->taxonomy_slug );
+			CPT_Tax_Syncer_REST_Controller::invalidate_cache();
 		}
 	}
 
