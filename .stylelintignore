@@ -1,0 +1,5 @@
+.claude/
+lib/
+build/
+node_modules/
+vendor/
