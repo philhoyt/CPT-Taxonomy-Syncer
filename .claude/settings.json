@@ -1,0 +1,54 @@
+{
+    "$schema": "https://json.schemastore.org/claude-code-settings.json",
+    "enableAllProjectMcpServers": true,
+    "permissions": {
+        "allow": [
+            "Bash(python3:*)",
+            "Bash(npm run:*)"
+        ]
+    },
+    "hooks": {
+        "PostToolUse": [
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node .claude/scripts/hooks/post-edit-phpcs.js",
+                        "description": "Run phpcs WordPress coding standards on edited PHP files"
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node .claude/scripts/hooks/post-edit-security-warn.js",
+                        "description": "Warn on common WordPress security anti-patterns in edited PHP files"
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node .claude/scripts/hooks/post-edit-eslint.js",
+                        "description": "Run ESLint on edited JS/JSX/TS/TSX files"
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node .claude/scripts/hooks/post-edit-stylelint.js",
+                        "description": "Run Stylelint on edited SCSS/CSS files"
+                    }
+                ]
+            }
+        ]
+    }
+}

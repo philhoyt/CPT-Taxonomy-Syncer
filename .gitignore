@@ -11,6 +11,9 @@ assets/css/*.min.css
 wp-config.php
 wp-content/
 
+# Claude Code — machine-specific session permissions, not shared
+.claude/settings.local.json
+
 # IDE
 .vscode/
 .idea/
