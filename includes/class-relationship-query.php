@@ -80,7 +80,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 * @return array Modified metadata.
 	 */
 	public function add_query_block_attributes( $metadata ) {
-		if ( isset( $metadata['name'] ) && $metadata['name'] === 'core/query' ) {
+		if ( isset( $metadata['name'] ) && 'core/query' === $metadata['name'] ) {
 			if ( ! isset( $metadata['attributes'] ) ) {
 				$metadata['attributes'] = array();
 			}
@@ -177,7 +177,7 @@ class CPT_Tax_Syncer_Relationship_Query {
 	 */
 	public function render_relationship_block( $block_content, $block ) {
 		// Only process Query Loop blocks.
-		if ( $block['blockName'] !== 'core/query' ) {
+		if ( 'core/query' !== $block['blockName'] ) {
 			return $block_content;
 		}
 

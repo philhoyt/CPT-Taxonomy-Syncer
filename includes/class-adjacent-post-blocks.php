@@ -326,7 +326,7 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 		}
 
 		// If current post not found in list, return null.
-		if ( $current_position === -1 ) {
+		if ( -1 === $current_position ) {
 			return null;
 		}
 

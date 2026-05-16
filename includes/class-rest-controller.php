@@ -334,8 +334,8 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'update_relationship_order' ),
-				'permission_callback' => function () {
-					return current_user_can( 'edit_posts' );
+				'permission_callback' => function ( $request ) {
+					return current_user_can( 'edit_post', $request->get_param( 'parent_post_id' ) );
 				},
 				'args'                => array(
 					'parent_post_id' => array(
@@ -1506,11 +1506,8 @@ class CPT_Tax_Syncer_REST_Controller {
 		$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
 		update_post_meta( $parent_post_id, $order_meta_key, $order );
 
-		// Invalidate cache for this post type and taxonomy.
-		$parent_post = get_post( $parent_post_id );
-		if ( $parent_post ) {
-			self::invalidate_cache( $parent_post->post_type, $taxonomy );
-		}
+		// Invalidate all relationship caches (cache is version-scoped, not per post-type).
+		self::invalidate_cache();
 
 		return new WP_REST_Response(
 			array(

@@ -109,7 +109,7 @@ class CPT_Tax_Syncer_Admin {
 	 * @param string $hook The current admin page.
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( $hook === 'tools_page_cpt-taxonomy-syncer' ) {
+		if ( 'tools_page_cpt-taxonomy-syncer' === $hook ) {
 			wp_enqueue_script(
 				'cpt-tax-syncer-admin',
 				CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/admin.js',
@@ -249,7 +249,7 @@ class CPT_Tax_Syncer_Admin {
 					<tbody>
 						<?php if ( empty( $pairs ) ) : ?>
 							<tr class="no-pairs">
-								<td colspan="3">No pairs configured yet.</td>
+								<td colspan="3"><?php esc_html_e( 'No pairs configured yet.', 'cpt-taxonomy-syncer' ); ?></td>
 							</tr>
 						<?php else : ?>
 							<?php foreach ( $pairs as $index => $pair ) : ?>
@@ -450,7 +450,7 @@ class CPT_Tax_Syncer_Admin {
 		}
 
 		if ( ! $current_pair ) {
-			echo '—';
+			echo esc_html( '—' );
 			return;
 		}
 
@@ -471,7 +471,7 @@ class CPT_Tax_Syncer_Admin {
 					esc_html( $term->name )
 				);
 			} else {
-				echo '—';
+				echo esc_html( '—' );
 			}
 		} else {
 			echo '<span style="color: #999;">' . esc_html__( 'Not linked', 'cpt-taxonomy-syncer' ) . '</span>';

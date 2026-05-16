@@ -231,7 +231,7 @@ class CPT_Taxonomy_Syncer {
 	 */
 	public function sync_post_to_term( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		// Skip auto-drafts and revisions.
-		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || $post->post_status === 'auto-draft' ) {
+		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || 'auto-draft' === $post->post_status ) {
 			return;
 		}
 
@@ -474,7 +474,7 @@ class CPT_Taxonomy_Syncer {
 		}
 
 		// Skip auto-drafts and revisions.
-		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || $post_after->post_status === 'auto-draft' ) {
+		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || 'auto-draft' === $post_after->post_status ) {
 			return;
 		}
 
