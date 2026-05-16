@@ -42,6 +42,18 @@ define( 'CPT_TAX_SYNCER_BATCH_SIZE', 100 );
 // Define cache TTL for relationship queries (15 minutes).
 define( 'CPT_TAX_SYNCER_CACHE_TTL', 15 * MINUTE_IN_SECONDS );
 
+// Plugin Update Checker — checks GitHub releases for updates.
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-checker.php';
+
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$cpt_tax_syncer_update_checker = PucFactory::buildUpdateChecker(
+	'https://github.com/philhoyt/CPT-Taxonomy-Syncer/',
+	__FILE__,
+	'cpt-taxonomy-syncer'
+);
+$cpt_tax_syncer_update_checker->getVcsApi()->enableReleaseAssets();
+
 // Include required files.
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
