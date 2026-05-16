@@ -1,6 +1,6 @@
 {
 	"name": "cpt-taxonomy-syncer",
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"description": "Automatically syncs a custom post type with a taxonomy",
 	"author": "Phil Hoyt",
 	"license": "GPL-2.0-or-later",
@@ -11,7 +11,8 @@
 		"README.md",
 		"includes",
 		"assets",
-		"build"
+		"build",
+		"lib"
 	],
 	"scripts": {
 		"build": "wp-scripts build",
