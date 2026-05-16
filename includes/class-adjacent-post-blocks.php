@@ -117,23 +117,27 @@ class CPT_Tax_Syncer_Adjacent_Post_Blocks {
 	public function localize_script_data() {
 		// Localize for Previous Post block.
 		if ( wp_script_is( 'cpt-tax-syncer-previous-post-relationship', 'enqueued' ) ) {
-			wp_localize_script(
+			wp_add_inline_script(
 				'cpt-tax-syncer-previous-post-relationship',
-				'cptTaxSyncerQuery',
-				array(
-					'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-				)
+				'var cptTaxSyncerQuery = ' . wp_json_encode(
+					array(
+						'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
+					)
+				) . ';',
+				'before'
 			);
 		}
 
 		// Localize for Next Post block.
 		if ( wp_script_is( 'cpt-tax-syncer-next-post-relationship', 'enqueued' ) ) {
-			wp_localize_script(
+			wp_add_inline_script(
 				'cpt-tax-syncer-next-post-relationship',
-				'cptTaxSyncerQuery',
-				array(
-					'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-				)
+				'var cptTaxSyncerQuery = ' . wp_json_encode(
+					array(
+						'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
+					)
+				) . ';',
+				'before'
 			);
 		}
 	}

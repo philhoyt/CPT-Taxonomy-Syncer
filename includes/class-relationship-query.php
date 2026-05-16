@@ -156,13 +156,15 @@ class CPT_Tax_Syncer_Relationship_Query {
 			);
 		}
 
-		wp_localize_script(
+		wp_add_inline_script(
 			'cpt-tax-syncer-relationship-query',
-			'cptTaxSyncerQuery',
-			array(
-				'postTypes' => $post_type_options,
-				'pairs'     => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-			)
+			'var cptTaxSyncerQuery = ' . wp_json_encode(
+				array(
+					'postTypes' => $post_type_options,
+					'pairs'     => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
+				)
+			) . ';',
+			'before'
 		);
 	}
 

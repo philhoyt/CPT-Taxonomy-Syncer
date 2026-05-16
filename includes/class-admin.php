@@ -118,14 +118,16 @@ class CPT_Tax_Syncer_Admin {
 				true
 			);
 
-			wp_localize_script(
+			wp_add_inline_script(
 				'cpt-tax-syncer-admin',
-				'cptTaxSyncerAdmin',
-				array(
-					'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
-					'nonce'    => wp_create_nonce( 'wp_rest' ),
-					'pairs'    => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-				)
+				'var cptTaxSyncerAdmin = ' . wp_json_encode(
+					array(
+						'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
+						'nonce'    => wp_create_nonce( 'wp_rest' ),
+						'pairs'    => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
+					)
+				) . ';',
+				'before'
 			);
 		}
 
@@ -181,13 +183,15 @@ class CPT_Tax_Syncer_Admin {
 				true
 			);
 
-			wp_localize_script(
+			wp_add_inline_script(
 				'cpt-tax-syncer-post-type-relationships',
-				'cptTaxSyncerPostTypeRelationships',
-				array(
-					'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
-					'nonce'    => wp_create_nonce( 'wp_rest' ),
-				)
+				'var cptTaxSyncerPostTypeRelationships = ' . wp_json_encode(
+					array(
+						'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
+						'nonce'    => wp_create_nonce( 'wp_rest' ),
+					)
+				) . ';',
+				'before'
 			);
 
 			// Set script translations.
