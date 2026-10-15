@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, block-editor, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.4.2
+Stable tag: 1.4.3
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -115,6 +115,9 @@ When you delete a synced post, the corresponding term is automatically deleted (
 5. Linked post information on term edit page
 
 == Changelog ==
+
+= 1.4.3 =
+* Fix: The `/post-type-relationships` REST route now checks the requested post type's own edit capability (the same gate as the Relationships page) instead of the literal `edit_posts`, so roles that can edit a custom post type but not blog posts can load the page.
 
 = 1.4.2 =
 * Fix: Include lib/ directory in plugin zip so Plugin Update Checker ships correctly.
