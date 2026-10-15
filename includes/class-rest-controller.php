@@ -300,8 +300,13 @@ class CPT_Tax_Syncer_REST_Controller {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( __CLASS__, 'get_post_type_relationships' ),
-				'permission_callback' => function () {
-					return current_user_can( 'edit_posts' );
+				// Same gate as the Relationships page that calls this: the
+				// requested post type's own edit capability, which for a type
+				// with its own capability_type is not `edit_posts`.
+				'permission_callback' => function ( $request ) {
+					$post_type = get_post_type_object( (string) $request->get_param( 'post_type' ) );
+
+					return $post_type && current_user_can( $post_type->cap->edit_posts );
 				},
 				'args'                => array(
 					'post_type' => array(

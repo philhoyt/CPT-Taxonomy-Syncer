@@ -13,6 +13,11 @@ module.exports = [
 			'vendor/**',
 		],
 	},
+	{
+		// ESLint flat config discovers only *.js, *.cjs, *.mjs on its own.
+		// Name every other extension here or the rules below never see it.
+		files: [ '**/*.jsx', '**/*.ts', '**/*.tsx' ],
+	},
 	...wpPlugin.configs.recommended,
 	{
 		languageOptions: {
