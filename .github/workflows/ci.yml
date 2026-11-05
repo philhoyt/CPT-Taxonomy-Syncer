@@ -99,7 +99,15 @@ jobs:
         run: composer install --prefer-dist --no-interaction
 
       - name: Start wp-env
-        run: npm run env:start
+        # Docker Hub pulls fail intermittently (502s); retry before giving up.
+        run: |
+          for attempt in 1 2 3; do
+            npm run env:start && exit 0
+            echo "wp-env start failed (attempt ${attempt}); retrying in 30s"
+            npm run env:stop || true
+            sleep 30
+          done
+          exit 1
 
       - name: Run PHPUnit
         run: npm run test:php
