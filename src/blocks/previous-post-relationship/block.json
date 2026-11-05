@@ -8,6 +8,7 @@
 	"icon": "arrow-left-alt2",
 	"description": "Navigate to the previous post using custom relationship order.",
 	"example": {},
+	"usesContext": [ "postId", "postType" ],
 	"attributes": {
 		"relationshipPair": {
 			"type": "string",
@@ -19,12 +20,26 @@
 		},
 		"linkText": {
 			"type": "string",
-			"default": "Previous:"
+			"default": ""
 		}
 	},
 	"supports": {
-		"html": false
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true
+		}
 	},
 	"textdomain": "cpt-taxonomy-syncer",
+	"editorScript": "file:./index.js",
+	"style": "file:./style-index.css",
 	"render": "file:./render.php"
 }

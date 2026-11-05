@@ -1,16 +1,17 @@
 const defaultConfig = require( '@wordpress/scripts/config/webpack.config' );
+const { getWebpackEntryPoints } = require( '@wordpress/scripts/utils' );
 
 module.exports = {
 	...defaultConfig,
 	entry: {
+		// Blocks are discovered from src/**/block.json and land next to the
+		// copied block.json at build/js/blocks/<name>/index.js.
+		...getWebpackEntryPoints( 'script' )(),
+		admin: './src/js/admin.js',
 		'relationship-query-variation':
 			'./src/js/relationship-query-variation.js',
 		'post-type-relationships-dashboard':
 			'./src/js/post-type-relationships-dashboard.jsx',
-		'previous-post-relationship':
-			'./src/blocks/previous-post-relationship/index.js',
-		'next-post-relationship':
-			'./src/blocks/next-post-relationship/index.js',
 	},
 	output: {
 		...defaultConfig.output,
