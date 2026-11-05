@@ -2,161 +2,146 @@
 
 [![Playground Demo](https://img.shields.io/badge/Playground_Demo-blue?logo=wordpress&logoColor=%23fff&labelColor=%233858e9&color=%23386be9)](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/philhoyt/CPT-Taxonomy-Syncer/main/_playground/blueprint.json)
 
-A WordPress plugin that automatically syncs Post Types with Taxonomies, creating shadow taxonomies and bidirectional relationships with block editor integration for displaying related content.
+Keeps a custom post type and a taxonomy in sync, and adds Query Loop and navigation blocks that show related posts.
 
-## Features
+![Settings page with a configured pair and the manual sync buttons](assets/screenshot-1.png)
 
-### Automatic Synchronization
+Pair a post type with a taxonomy and the plugin mirrors one onto the other. Saving a post creates a term with the same name; creating a term creates a post with the same title. Renames, deletions, and the term description flow both ways. Each side stores its partner's ID in meta (`_term_id_{taxonomy}` on the post, `_post_id_{post_type}` on the term), so the link does not depend on matching titles.
 
-- Creates corresponding taxonomy terms when posts are created (and vice versa)
-- Updates titles and content between synced posts and terms
-- Deletes corresponding items when one is removed
-- Prevents duplicate creation and orphaned data
+Because the taxonomy mirrors the post type, assigning its terms to other content gives you "related to this post" queries with nothing more than a normal tax query. The plugin builds on that with:
 
-### Shadow Taxonomy System
-
-- Creates a taxonomy that mirrors your post type, enabling powerful relationship queries
-- Leverages WordPress's taxonomy system for organizing and querying related content
-- Maintains the flexibility of custom post types while providing taxonomy-based relationships
-
-### Block Editor Integration
-
-- Adds "Use synced relationship" toggle to Query Loop blocks and **Relationship Query Loop** block variation
-- Displays posts that share taxonomy terms with the current post using the shadow taxonomy relationship
-- **Custom Ordering**: Drag-and-drop interface to reorder related posts per relationship
-- **Previous/Next Post Blocks**: Custom navigation blocks that respect custom ordering
-- **Menu Order Fallback**: Automatically uses `menu_order` when custom order hasn't been set
-
-### Admin Tools
-
-- Settings page at **Tools → CPT-Tax Syncer**
-- Add/remove CPT-taxonomy sync pairs
-- Manual bulk sync operations for existing content
-- Optional archive redirection from taxonomy pages to post pages
-- **Relationships Dashboard**: Per post-type dashboard showing parent-to-child relationships with drag-and-drop ordering
-
-## Installation
-
-1. Download the latest `cpt-taxonomy-syncer.zip` from the [GitHub Releases page](https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/latest)
-2. In your WordPress admin, go to **Plugins → Add New Plugin**
-3. Click **Upload Plugin** and select the downloaded `.zip` file
-4. Click **Install Now**, then **Activate Plugin**
-5. Configure at **Tools → CPT-Tax Syncer**
-
-## Usage
-
-### Setup
-
-1. Go to **Tools → CPT-Tax Syncer**
-2. Click **Add New Pair**
-3. Select your Post Type and Taxonomy
-4. Click **Save Changes**
-5. Use sync buttons for existing content
-
-### Block Editor
-
-1. Add a **Query Loop** or **Relationship Query Loop** block to any template
-2. In block inspector, find **Synced Relationships** panel
-3. Toggle **"Use synced relationship"**
-4. Select target post type from Query Loop settings
-5. Optionally enable **"Use custom order"** to respect the order set in the Relationships dashboard
-
-### Custom Ordering
-
-1. Navigate to your post type's admin menu (e.g., **Posts → Relationships**)
-2. View all parent posts and their related posts
-3. Drag and drop related posts to reorder them
-4. The custom order is automatically saved and used by Query Loop blocks and Previous/Next Post blocks
-
-### Previous/Next Post Navigation
-
-1. Add **Previous Post (Relationship)** or **Next Post (Relationship)** blocks to your templates
-2. Select the relationship pair to use for navigation
-3. Optionally enable/disable custom order
-4. Customize the link text (default: "Previous:" or "Next:")
-5. Navigation respects the custom order set in the Relationships dashboard
-
-## Development
-
-This plugin uses `@wordpress/scripts` for building JavaScript assets. See [BUILD.md](BUILD.md) for build instructions.
-
-### Quick Start
-
-```bash
-npm install
-npm run build
-```
-
-## Changelog
-
-### 1.4.4
-
-- Change: Tested up to WordPress 7.1.
-
-### 1.4.3
-
-- Fix: The `/post-type-relationships` REST route now checks the requested post type's own edit capability (the same gate as the Relationships page) instead of the literal `edit_posts`, so roles that can edit a custom post type but not blog posts can load the page.
-
-### 1.4.2
-
-- Fix: Include lib/ directory in plugin zip so Plugin Update Checker ships correctly.
-
-### 1.4.1
-
-- Security: Tighten REST permission callback to per-post capability check.
-
-### 1.4.0
-
-- Added Plugin Update Checker to deliver automatic updates via GitHub releases
-- Added CI workflow for automated linting and build checks on pull requests
-- Replaced `wp_localize_script` with `wp_add_inline_script` in admin script registration
-- Fixed escaping warnings in JSX and PHP audit pass
-- Removed dead `view.js` stubs from block registration
-- Removed unused parameters from `invalidate_cache()` and corrected a misleading false-positive comment
-- Full PHPCS linting pass with zero errors
-
-### 1.3.0
-
-- Fixed critical `uninstall.php` fatal error caused by an undefined constant
-- Fixed duplicate REST route registrations when multiple CPT-taxonomy pairs are configured
-- Fixed `sync_post_update_to_term()` ignoring the authoritative post meta relationship
-- Fixed shared static `$is_deleting`/`$is_updating` flags breaking multi-pair sync
-- Fixed `get_post_type_relationships()` returning posts from unrelated post types
-- Fixed unescaped `$wrapper_attributes` output in block render templates
-- Replaced nested ternary in Relationships Dashboard with a readable variable
-- Removed unused `SelectControl` import from Relationship Query Loop variation
-- Added missing `@package` tags and corrected inline comment style in render templates
-- Full linting pass: zero PHPCS errors, zero ESLint errors
-
-### 1.2.0
-- **Custom Ordering System**: Drag-and-drop interface for reordering related posts per relationship
-- **Relationships Dashboard**: Per post-type dashboard showing parent-to-child relationships
-- **Previous/Next Post Blocks**: Custom navigation blocks with relationship-based ordering support
-- **Menu Order Fallback**: Automatic fallback to `menu_order` when custom order isn't set
-- Major performance improvements with transient caching for relationship queries
-- Implemented query result caching with automatic invalidation
-- Optimized REST API endpoints to eliminate N+1 query problems
-- Added comprehensive developer hooks and filters for extensibility
-- Improved static cache management with TTL-based expiration
-- Enhanced developer reference section with meta key values
-- Fixed admin.js with batch processing and progress indicators
-
-### 1.1.0
-- Major performance improvements with optimized bulk sync operations
-- Implemented batch processing with REST API endpoints
-- Fixed duplicate post title handling
-- Added admin columns and synced post information
-- Full internationalization support
-
-### 1.0.0
-- Initial release
+- A "Use synced relationship" toggle on the Query Loop block and a Relationship Query Loop variation. The block lists posts that share a term with the post being viewed.
+- A Relationships screen under each synced post type's menu where related posts can be dragged into a custom order. The order is saved to `_cpt_tax_syncer_relationship_order_{taxonomy}` on the parent post.
+- Previous Post (Relationship) and Next Post (Relationship) blocks that follow that order.
+- A Synced Term column in the post list and a Linked Post box on the term edit screen.
+- An optional 301 redirect from a term's archive to its linked post.
+- Bulk sync for content that existed before the pair was added.
+- A WP-CLI command that checks a pair and removes links to deleted partners.
 
 ## Requirements
 
-- WordPress 6.7+
-- PHP 7.4+
-- Node.js 14+ (for building assets)
+- WordPress 6.0 or later
+- PHP 7.4 or later
+- Node.js 22 or later to build the JavaScript (the CI and release workflows use Node 24)
+
+## Installation
+
+1. Download `cpt-taxonomy-syncer.zip` from the [latest release](https://github.com/philhoyt/CPT-Taxonomy-Syncer/releases/latest).
+2. In the WordPress admin, go to Plugins > Add New Plugin > Upload Plugin and choose the zip.
+3. Click Install Now, then Activate.
+
+Updates come from GitHub releases through Plugin Update Checker. The plugin is not on WordPress.org.
+
+## Usage
+
+### Add a pair
+
+Go to Tools > CPT-Tax Syncer, click Add Pair, choose a post type and a taxonomy, and save. Tick Redirect Archive to send the taxonomy's archive URLs to the linked post. If the post type or taxonomy already has content, use the Sync Posts to Terms and Sync Terms to Posts buttons; they run in batches over the REST API.
+
+Saving a post in a synced post type creates its term unless the post is an auto-draft or revision. Any other status, including draft, triggers the sync. Posts created from terms are published immediately with the term description as their content.
+
+### Query Loop
+
+Add a Query Loop block (or the Relationship Query Loop variation) to a single post template. In the inspector, open Synced Relationships and turn on "Use synced relationship". Turn on "Use custom order" to sort by the order saved on the Relationships screen; otherwise related posts sort by `menu_order`, then ID.
+
+### Custom order
+
+Each synced post type gets a Relationships item in its admin menu. The screen lists every parent post with its related posts. Drag to reorder; the order saves on drop.
+
+![Relationships screen with related posts in a custom order](assets/screenshot-2.png)
+
+### Previous and Next blocks
+
+Add Previous Post (Relationship) or Next Post (Relationship) to a single post template. Block options: which pair to follow, whether to use the custom order (on by default), and the link text (defaults "Previous:" and "Next:").
+
+### Duplicate titles
+
+If a second post has the same title as an existing term, its term gets a suffix: the post slug when it differs from the title, otherwise the post ID (`Comedy (ID: 123)`).
+
+### Removing a pair and uninstalling
+
+Removing a pair stops syncing but leaves posts, terms, and meta in place. Uninstall deletes the saved pairs and also leaves the relationship meta, so reinstalling picks the links back up. There is no built-in way to strip the meta.
+
+## REST API
+
+All routes are under `cpt-tax-syncer/v1` and require the relevant edit capability.
+
+| Route | Purpose |
+|-------|---------|
+| `/create-term`, `/create-post` | Create one side of a link for a given post or term |
+| `/sync-posts-to-terms`, `/sync-terms-to-posts` | Single-request bulk sync |
+| `/batch-sync/init`, `/batch-sync/process`, `/batch-sync/progress`, `/batch-sync/cleanup` | Batched bulk sync used by the settings page |
+| `/relationships` | Related posts for one post |
+| `/post-type-relationships` | Every parent post and its related posts for a post type (Relationships screen) |
+| `/relationship-order` | Save the custom order for a parent post |
+
+## Hooks
+
+| Hook | Type | Purpose |
+|------|------|---------|
+| `cpt_tax_syncer_before_sync_post_to_term` | filter | Return `false` to skip creating a term for a post. Receives `$post_id`, `$post`, `$cpt_slug`, `$taxonomy_slug`. |
+| `cpt_tax_syncer_after_sync_post_to_term` | action | Runs after a term is created for a post. |
+| `cpt_tax_syncer_before_sync_term_to_post` | filter | Return `false` to skip creating a post for a term. |
+| `cpt_tax_syncer_after_sync_term_to_post` | action | Runs after a post is created for a term. |
+| `cpt_tax_syncer_query_vars` | filter | Change the `WP_Query` args used for relationship queries. Receives `$query_vars`, `$syncer_settings`, `$current_pair`, `$post`. |
+| `cpt_tax_syncer_relationship_order` | filter | Change the array of post IDs before a custom order is saved. Receives `$order`, `$parent_post_id`, `$taxonomy`. |
+| `cpt_tax_syncer_max_posts_per_query` | filter | Cap on posts returned by a relationship query. Default 1000. |
+| `cpt_tax_syncer_batch_size` | filter | Posts or terms per batch during bulk sync. Default 100. |
+| `cpt_tax_syncer_cache_ttl` | filter | Lifetime of the relationship query transients. Default 15 minutes. |
+
+## WP-CLI
+
+```bash
+wp cpt-tax-syncer verify <cpt_slug> <taxonomy_slug> [--fix]
+```
+
+Counts posts without a term link, terms without a post link, and links that point at a deleted partner. `--fix` removes the dangling links; it does not create missing terms or posts. Use the bulk sync buttons for that.
+
+The other commands are for test sites:
+
+```bash
+wp cpt-tax-syncer generate-test-data <cpt_slug> <taxonomy_slug> [--count=<n>] [--skip-sync] [--create-terms]
+wp cpt-tax-syncer test-sync <cpt_slug> <taxonomy_slug> <posts-to-terms|terms-to-posts> [--batch-size=<n>] [--verbose]
+wp cpt-tax-syncer cleanup <cpt_slug> <taxonomy_slug> [--confirm]
+```
+
+`cleanup` permanently deletes every post in the post type and every term in the taxonomy. It asks for confirmation unless `--confirm` is passed. Do not run it on a live site.
+
+## Development
+
+```bash
+npm install
+composer install
+npm start            # watch and rebuild src/ into build/
+npm run build        # production build
+npm run lint:js
+npm run lint:css
+npm run format
+composer run lint    # phpcs
+composer run lint-fix
+npm run plugin-zip   # build the distributable zip (respects .distignore)
+```
+
+`composer install` also copies Plugin Update Checker from `vendor/` into `lib/`, which ships in the zip. There is no automated test suite; `TESTING.md` lists the manual checks and `.wp-env.json` starts a local site with the plugin active.
+
+CI (`.github/workflows/ci.yml`) runs the JS and CSS linters, the build, and phpcs on every push and pull request to `main`.
+
+## Releases
+
+Bump the version in `cpt-taxonomy-syncer.php` (header and `CPT_TAXONOMY_SYNCER_VERSION`), `package.json`, both `block.json` files, and `Stable tag` in `readme.txt`, add the changelog entry to `readme.txt`, then push a `v`-prefixed tag:
+
+```bash
+git tag v1.4.4 && git push origin v1.4.4
+```
+
+The release workflow builds the assets, runs `npm run plugin-zip`, extracts that version's section from the `readme.txt` changelog as the release notes, and attaches `cpt-taxonomy-syncer.zip` and `readme.txt` to the GitHub release. Plugin Update Checker reads that release to offer the update.
+
+## Limitations
+
+- Posts created from terms are always published; there is no option to create them as drafts.
+- Relationship queries are capped at 1000 posts unless `cpt_tax_syncer_max_posts_per_query` raises it.
+- Uninstall leaves relationship meta behind by design.
 
 ## License
 
-GPL v2 or later
+GPL-2.0-or-later
