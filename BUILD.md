@@ -76,14 +76,14 @@ The `.distignore` file controls which files are excluded from the zip. It exclud
 
 ## File Structure
 
-- `assets/js/src/` - Source files (JSX)
-- `assets/js/` - Built files (compiled JavaScript)
+- `src/js/` - Source files (JSX and JS)
+- `build/js/` - Built files (compiled JavaScript and asset manifests)
 - `webpack.config.js` - Webpack configuration
 - `package.json` - Dependencies and scripts
 
 ## Notes
 
-- The built file `assets/js/relationships-dashboard.js` must exist for the relationships dashboard to work
+- The built file `build/js/post-type-relationships-dashboard.js` must exist for the relationships dashboard to work
 - If the built file is missing, an admin notice will be shown
 - Source files use JSX syntax and must be compiled before use
 - The build process uses WordPress's default webpack configuration with custom entry points
