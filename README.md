@@ -6,7 +6,7 @@ Keeps a custom post type and a taxonomy in sync, and adds Query Loop and navigat
 
 ![Settings page with a configured pair and the manual sync buttons](assets/screenshot-1.png)
 
-Pair a post type with a taxonomy and the plugin mirrors one onto the other. Saving a post creates a term with the same name; creating a term creates a post with the same title. Renames, deletions, and the term description flow both ways. Each side stores its partner's ID in meta (`_term_id_{taxonomy}` on the post, `_post_id_{post_type}` on the term), so the link does not depend on matching titles.
+Pair a post type with a taxonomy and the plugin mirrors one onto the other. Publishing a post creates a term with the same name; creating a term creates a post with the same title. Renames and deletions flow both ways. Each side stores its partner's ID in meta (`_term_id_{taxonomy}` on the post, `_post_id_{post_type}` on the term), so the link does not depend on matching titles.
 
 Because the taxonomy mirrors the post type, assigning its terms to other content gives you "related to this post" queries with nothing more than a normal tax query. The plugin builds on that with:
 
@@ -38,7 +38,11 @@ Updates come from GitHub releases through Plugin Update Checker. The plugin is n
 
 Go to Tools > CPT-Tax Syncer, click Add Pair, choose a post type and a taxonomy, and save. Tick Redirect Archive to send the taxonomy's archive URLs to the linked post. If the post type or taxonomy already has content, use the Sync Posts to Terms and Sync Terms to Posts buttons; they run in batches over the REST API.
 
-Saving a post in a synced post type creates its term unless the post is an auto-draft or revision. Any other status, including draft, triggers the sync. Posts created from terms are published immediately with the term description as their content.
+Publishing a post in a synced post type creates its term. Drafts, pending and private posts get no term, so their titles never appear in the (public) taxonomy; the `cpt_tax_syncer_synced_post_statuses` filter widens the list. Posts created from terms are published immediately with the term description as their initial content. Editing a term afterwards renames its post but leaves the post content alone unless the `cpt_tax_syncer_sync_term_description` filter returns true.
+
+Deleting a post permanently deletes its term. Deleting a term moves its post to the trash (or deletes it when the trash is disabled); trashing a post leaves its term in place until the trash is emptied.
+
+Note that whoever can create, rename or delete a term in the paired taxonomy thereby creates, renames or trashes a post in the paired post type, whatever their post capabilities. With the default taxonomy capabilities that is Editors and above; if you grant taxonomy capabilities to lower roles, use the `cpt_tax_syncer_before_sync_term_to_post` and `cpt_tax_syncer_before_sync_term_deletion_to_post` filters to add a post capability check.
 
 ### Query Loop
 
@@ -64,15 +68,15 @@ Removing a pair stops syncing but leaves posts, terms, and meta in place. Uninst
 
 ## REST API
 
-All routes are under `cpt-tax-syncer/v1` and require the relevant edit capability.
+All routes are under `cpt-tax-syncer/v1`. The create routes require the post type's `publish_posts` or the taxonomy's `manage_terms` capability and only accept a configured pair; the sync, batch and `/relationships` routes require `manage_options`; the Relationships screen routes require the post type's edit capability.
 
 | Route | Purpose |
 |-------|---------|
 | `/create-term`, `/create-post` | Create one side of a link for a given post or term |
 | `/sync-posts-to-terms`, `/sync-terms-to-posts` | Single-request bulk sync |
 | `/batch-sync/init`, `/batch-sync/process`, `/batch-sync/progress`, `/batch-sync/cleanup` | Batched bulk sync used by the settings page |
-| `/relationships` | Related posts for one post |
-| `/post-type-relationships` | Every parent post and its related posts for a post type (Relationships screen) |
+| `/relationships` | Every linked post and term across all configured pairs (administrators only) |
+| `/post-type-relationships` | One page of parent posts and their related posts for a post type (Relationships screen); related posts the caller cannot read are omitted |
 | `/relationship-order` | Save the custom order for a parent post |
 
 ## Hooks
@@ -83,6 +87,14 @@ All routes are under `cpt-tax-syncer/v1` and require the relevant edit capabilit
 | `cpt_tax_syncer_after_sync_post_to_term` | action | Runs after a term is created for a post. |
 | `cpt_tax_syncer_before_sync_term_to_post` | filter | Return `false` to skip creating a post for a term. |
 | `cpt_tax_syncer_after_sync_term_to_post` | action | Runs after a post is created for a term. |
+| `cpt_tax_syncer_before_sync_post_deletion_to_term` | filter | Return `false` to keep the term when its post is deleted. Receives `$post_id`, `$term`, `$cpt_slug`, `$taxonomy_slug`. |
+| `cpt_tax_syncer_after_sync_post_deletion_to_term` | action | Runs after a post deletion removed its term. |
+| `cpt_tax_syncer_before_sync_term_deletion_to_post` | filter | Return `false` to keep the post when its term is deleted. Receives `$term_id`, `$post_id`, `$cpt_slug`, `$taxonomy_slug`. |
+| `cpt_tax_syncer_after_sync_term_deletion_to_post` | action | Runs after a term deletion trashed or deleted its post. |
+| `cpt_tax_syncer_linked` | action | Runs whenever a post and a term are linked on both sides. Receives `$post_id`, `$term_id`, `$cpt_slug`, `$taxonomy_slug`. |
+| `cpt_tax_syncer_synced_post_statuses` | filter | Post statuses that create a term. Default `array( 'publish' )`. |
+| `cpt_tax_syncer_sync_term_description` | filter | Return `true` to copy the term description into the post content on term edits. Default `false`. |
+| `cpt_tax_syncer_sync_error` | action | Runs when a sync write fails. Receives the `WP_Error`, `$post_id`, `$term`. |
 | `cpt_tax_syncer_query_vars` | filter | Change the `WP_Query` args used for relationship queries. Receives `$query_vars`, `$syncer_settings`, `$current_pair`, `$post`. |
 | `cpt_tax_syncer_relationship_order` | filter | Change the array of post IDs before a custom order is saved. Receives `$order`, `$parent_post_id`, `$taxonomy`. |
 | `cpt_tax_syncer_max_posts_per_query` | filter | Cap on posts returned by a relationship query. Default 1000. |
@@ -116,15 +128,19 @@ npm start            # watch and rebuild src/ into build/
 npm run build        # production build
 npm run lint:js
 npm run lint:css
+npm run lint:dup     # jscpd duplication check
 npm run format
-composer run lint    # phpcs
+composer run lint    # phpcs (WordPress standards, PHPCompatibility, readability metrics)
 composer run lint-fix
+composer run mess    # phpmd
+npm run env:start    # wp-env site on http://localhost:8888 with the plugin active
+npm run test:php     # PHPUnit inside the wp-env tests container
 npm run plugin-zip   # build the distributable zip (respects .distignore)
 ```
 
-`composer install` also copies Plugin Update Checker from `vendor/` into `lib/`, which ships in the zip. There is no automated test suite; `TESTING.md` lists the manual checks and `.wp-env.json` starts a local site with the plugin active.
+`composer install` also copies Plugin Update Checker from `vendor/` into `lib/`, which ships in the zip. The PHPUnit suite under `tests/phpunit/` covers the sync hooks, bulk sync, REST routes, settings sanitizer, Query Loop integration and the adjacent-post lookup; `TESTING.md` lists the WP-CLI checks for larger datasets.
 
-CI (`.github/workflows/ci.yml`) runs the JS and CSS linters, the build, and phpcs on every push and pull request to `main`.
+CI (`.github/workflows/ci.yml`) runs phpcs and phpmd on every supported PHP version, the JS and CSS linters, jscpd, the build, and the PHPUnit suite on every push and pull request to `main`.
 
 ## Releases
 
