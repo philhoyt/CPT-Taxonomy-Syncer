@@ -89,6 +89,10 @@ npm run build
 
 ## Changelog
 
+### 1.4.4
+
+- Change: Tested up to WordPress 7.1.
+
 ### 1.3.0
 
 - Fixed critical `uninstall.php` fatal error caused by an undefined constant
