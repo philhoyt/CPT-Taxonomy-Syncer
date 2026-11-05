@@ -39,3 +39,6 @@ yarn-error.log*
 *.zip
 /vendor
 audit.md
+
+# wp-env local override
+.wp-env.override.json

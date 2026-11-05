@@ -6,7 +6,7 @@
  * Version: 1.4.3
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Tested up to: 6.9
+ * Tested up to: 7.1
  * Author:            philhoyt
  * Author URI:        https://philhoyt.com
  * License:           GPL-2.0-or-later
