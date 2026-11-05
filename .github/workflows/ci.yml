@@ -7,7 +7,40 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  php:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Starts at the plugin's "Requires PHP" floor.
+        php: ['7.4', '8.1', '8.3', '8.4']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      - name: Audit PHP dependencies
+        run: composer audit
+
+      - name: PHP CodeSniffer
+        run: composer run lint
+
+      - name: PHP Mess Detector
+        run: composer run mess
+
+  js:
+    name: JavaScript
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +62,29 @@ jobs:
       - name: Lint CSS
         run: npm run lint:css
 
+      - name: Duplication (jscpd)
+        run: npm run lint:dup
+
+      - name: Build assets
+        run: npm run build
+
+  test:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node (for wp-env)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci
+
       - name: Build assets
         run: npm run build
 
@@ -37,9 +93,13 @@ jobs:
         with:
           php-version: '8.3'
           tools: composer
+          coverage: none
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction
 
-      - name: PHP CodeSniffer
-        run: composer run lint
+      - name: Start wp-env
+        run: npm run env:start
+
+      - name: Run PHPUnit
+        run: npm run test:php

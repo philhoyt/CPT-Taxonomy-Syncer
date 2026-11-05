@@ -1,12 +1,16 @@
 {
 	"require": {
+		"php": ">=7.4",
 		"yahnis-elsts/plugin-update-checker": "^5.3"
 	},
 	"require-dev": {
 		"squizlabs/php_codesniffer": "^3.10",
 		"wp-coding-standards/wpcs": "^3.1",
 		"dealerdirect/phpcodesniffer-composer-installer": "^0.7",
-		"phpcompatibility/phpcompatibility-wp": "*"
+		"phpcompatibility/phpcompatibility-wp": "*",
+		"phpunit/phpunit": "^9.6",
+		"yoast/phpunit-polyfills": "^2.0",
+		"phpmd/phpmd": "^2.15"
 	},
 	"scripts": {
 		"copy-puc": "rsync -a --delete vendor/yahnis-elsts/plugin-update-checker/ lib/plugin-update-checker/",
@@ -14,12 +18,15 @@
 		"post-update-cmd": "@copy-puc",
 		"lint": "phpcs",
 		"lint-fix": "phpcbf",
-		"lint-all": "phpcs --standard=WordPress --extensions=php --ignore=*/vendor/*,*/node_modules/*,*/build/* .",
-		"lint-fix-all": "phpcbf --standard=WordPress --extensions=php --ignore=*/vendor/*,*/node_modules/*,*/build/* ."
+		"mess": "phpmd cpt-taxonomy-syncer.php,uninstall.php,includes text phpmd.xml",
+		"test": "phpunit"
 	},
 	"config": {
 		"allow-plugins": {
 			"dealerdirect/phpcodesniffer-composer-installer": true
+		},
+		"platform": {
+			"php": "7.4.99"
 		}
 	}
 }

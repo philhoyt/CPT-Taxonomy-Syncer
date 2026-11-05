@@ -38,7 +38,13 @@ yarn-error.log*
 # Build artifacts
 *.zip
 /vendor
-audit.md
+
+# Claude Code — local audit and planning notes, not part of the codebase
+plans/
+
+# PHPUnit writes these to the project root
+.phpunit.result.cache
+coverage.xml
 
 # wp-env local override
 .wp-env.override.json

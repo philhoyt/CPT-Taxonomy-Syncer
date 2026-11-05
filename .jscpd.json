@@ -1,0 +1,21 @@
+{
+	"pattern": "**/*.{php,js,jsx,ts,tsx,scss}",
+	"ignore": [
+		"**/node_modules/**",
+		"**/vendor/**",
+		"**/build/**",
+		"**/lib/**",
+		"**/.claude/**",
+		"**/plans/**",
+		"**/tests/**",
+		"**/*.asset.php"
+	],
+	"minLines": 10,
+	"minTokens": 70,
+	"threshold": 0,
+	"gitignore": true,
+	"reporters": [
+		"console"
+	],
+	"mode": "weak"
+}

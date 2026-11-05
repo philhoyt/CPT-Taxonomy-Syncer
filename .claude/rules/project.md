@@ -13,7 +13,7 @@ paths:
 
 - Slug: `cpt-taxonomy-syncer`
 - Text domain: `cpt-taxonomy-syncer`
-- PHP minimum: 8.1
+- PHP minimum: 7.4
 - WP minimum: 6.0
 - Distribution: GitHub (Plugin Update Checker)
 - Main file: `cpt-taxonomy-syncer.php`
