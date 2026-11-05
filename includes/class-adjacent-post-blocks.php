@@ -2,7 +2,8 @@
 /**
  * Adjacent Post Blocks Handler for CPT-Taxonomy Syncer
  *
- * Registers and handles custom Previous/Next Post blocks with relationship support
+ * Registers the Previous/Next Post (Relationship) blocks and resolves the
+ * neighbouring post in the relationship order.
  *
  * @package CPT_Taxonomy_Syncer
  */
@@ -14,331 +15,227 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class CPT_Tax_Syncer_Adjacent_Post_Blocks
- *
- * Registers and handles custom adjacent post navigation blocks
  */
 class CPT_Tax_Syncer_Adjacent_Post_Blocks {
+	/**
+	 * Data-only script handle carrying the configured pairs to the editor.
+	 */
+	const DATA_HANDLE = 'cpt-tax-syncer-editor-data';
+
+	/**
+	 * Block names keyed by direction.
+	 *
+	 * @var array<string, string>
+	 */
+	const BLOCKS = array(
+		'previous' => 'cpt-tax-syncer/previous-post-relationship',
+		'next'     => 'cpt-tax-syncer/next-post-relationship',
+	);
 
 	/**
 	 * Constructor
 	 */
 	public function __construct() {
-		// Register blocks.
 		add_action( 'init', array( $this, 'register_blocks' ), 20 );
-
-		// Enqueue block editor assets.
-		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_block_editor_assets' ) );
-
-		// Localize script data for blocks.
-		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_script_data' ) );
+		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_editor_data' ) );
 	}
 
 	/**
-	 * Register custom blocks
+	 * Registers both blocks from their built block.json, which owns the scripts and styles.
 	 */
 	public function register_blocks() {
-		// Register Previous Post block.
-		$previous_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/blocks/previous-post-relationship';
-		if ( file_exists( $previous_block_path . '/block.json' ) ) {
-			register_block_type( $previous_block_path );
-		}
+		foreach ( self::BLOCKS as $block_name ) {
+			$block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/blocks/' . substr( $block_name, strlen( 'cpt-tax-syncer/' ) );
 
-		// Register Next Post block.
-		$next_block_path = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/blocks/next-post-relationship';
-		if ( file_exists( $next_block_path . '/block.json' ) ) {
-			register_block_type( $next_block_path );
+			if ( file_exists( $block_path . '/block.json' ) ) {
+				register_block_type( $block_path );
+			}
 		}
 	}
 
 	/**
-	 * Enqueue block editor assets
+	 * Prints the configured pairs once for every editor script that needs them.
 	 */
-	public function enqueue_block_editor_assets() {
-		// Enqueue Previous Post block script.
-		$previous_script = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/previous-post-relationship.js';
-		$previous_asset  = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/previous-post-relationship.asset.php';
-
-		if ( file_exists( $previous_script ) ) {
-			$asset = array(
-				'dependencies' => array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-block-editor', 'wp-components' ),
-				'version'      => filemtime( $previous_script ),
-			);
-			if ( file_exists( $previous_asset ) ) {
-				$loaded_asset = require $previous_asset;
-				if ( isset( $loaded_asset['dependencies'] ) ) {
-					$asset['dependencies'] = array_unique( array_merge( $asset['dependencies'], $loaded_asset['dependencies'] ) );
-				}
-				if ( isset( $loaded_asset['version'] ) ) {
-					$asset['version'] = $loaded_asset['version'];
-				}
-			}
-
-			wp_enqueue_script(
-				'cpt-tax-syncer-previous-post-relationship',
-				CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'build/js/previous-post-relationship.js',
-				$asset['dependencies'],
-				$asset['version'],
-				true
-			);
-		}
-
-		// Enqueue Next Post block script.
-		$next_script = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/next-post-relationship.js';
-		$next_asset  = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/next-post-relationship.asset.php';
-
-		if ( file_exists( $next_script ) ) {
-			$asset = array(
-				'dependencies' => array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-block-editor', 'wp-components' ),
-				'version'      => filemtime( $next_script ),
-			);
-			if ( file_exists( $next_asset ) ) {
-				$loaded_asset = require $next_asset;
-				if ( isset( $loaded_asset['dependencies'] ) ) {
-					$asset['dependencies'] = array_unique( array_merge( $asset['dependencies'], $loaded_asset['dependencies'] ) );
-				}
-				if ( isset( $loaded_asset['version'] ) ) {
-					$asset['version'] = $loaded_asset['version'];
-				}
-			}
-
-			wp_enqueue_script(
-				'cpt-tax-syncer-next-post-relationship',
-				CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'build/js/next-post-relationship.js',
-				$asset['dependencies'],
-				$asset['version'],
-				true
-			);
-		}
+	public function enqueue_editor_data() {
+		wp_register_script( self::DATA_HANDLE, false, array(), CPT_TAXONOMY_SYNCER_VERSION, true );
+		wp_add_inline_script(
+			self::DATA_HANDLE,
+			'var cptTaxSyncerQuery = ' . wp_json_encode( array( 'pairs' => array_map( static fn( $pair ) => $pair->to_row(), CPT_Tax_Syncer_Pair::all() ) ) ) . ';',
+			'before'
+		);
+		wp_enqueue_script( self::DATA_HANDLE );
 	}
 
 	/**
-	 * Localize script data for blocks
+	 * Renders one of the two blocks.
+	 *
+	 * @param array  $attributes      Block attributes.
+	 * @param string $direction       'previous' or 'next'.
+	 * @param int    $current_post_id The post being viewed (block context), 0 for the global post.
+	 * @return string Escaped markup, empty when there is nothing to link to.
 	 */
-	public function localize_script_data() {
-		// Localize for Previous Post block.
-		if ( wp_script_is( 'cpt-tax-syncer-previous-post-relationship', 'enqueued' ) ) {
-			wp_add_inline_script(
-				'cpt-tax-syncer-previous-post-relationship',
-				'var cptTaxSyncerQuery = ' . wp_json_encode(
-					array(
-						'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-					)
-				) . ';',
-				'before'
-			);
+	public static function render_block( array $attributes, string $direction, int $current_post_id = 0 ): string {
+		$pair_parts = explode( '|', (string) ( $attributes['relationshipPair'] ?? '' ) );
+		if ( 2 !== count( $pair_parts ) ) {
+			return '';
 		}
 
-		// Localize for Next Post block.
-		if ( wp_script_is( 'cpt-tax-syncer-next-post-relationship', 'enqueued' ) ) {
-			wp_add_inline_script(
-				'cpt-tax-syncer-next-post-relationship',
-				'var cptTaxSyncerQuery = ' . wp_json_encode(
-					array(
-						'pairs' => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-					)
-				) . ';',
-				'before'
-			);
+		$current_post_id = $current_post_id ? $current_post_id : (int) get_the_ID();
+		if ( ! $current_post_id ) {
+			return '';
 		}
+
+		$adjacent_post = self::get_adjacent_post(
+			$current_post_id,
+			$pair_parts[0],
+			$pair_parts[1],
+			'previous' === $direction,
+			! isset( $attributes['useCustomOrder'] ) || (bool) $attributes['useCustomOrder']
+		);
+
+		if ( ! $adjacent_post ) {
+			return '';
+		}
+
+		return self::link_markup( $adjacent_post, $direction, (string) ( $attributes['linkText'] ?? '' ) );
+	}
+
+	/**
+	 * The block's wrapper and link markup for a resolved neighbour.
+	 *
+	 * @param WP_Post $adjacent_post The neighbour.
+	 * @param string  $direction     'previous' or 'next'.
+	 * @param string  $link_text     Link text; the direction's default when empty.
+	 * @return string Escaped markup.
+	 */
+	private static function link_markup( WP_Post $adjacent_post, string $direction, string $link_text ): string {
+		if ( '' === $link_text ) {
+			$link_text = 'previous' === $direction ? __( 'Previous:', 'cpt-taxonomy-syncer' ) : __( 'Next:', 'cpt-taxonomy-syncer' );
+		}
+
+		$title_class = 'wp-block-' . str_replace( '/', '-', self::BLOCKS[ $direction ] ) . '__title';
+		$title       = get_the_title( $adjacent_post );
+
+		return sprintf(
+			'<div %1$s><a href="%2$s" rel="%3$s">%4$s%5$s</a></div>',
+			get_block_wrapper_attributes(),
+			esc_url( get_permalink( $adjacent_post ) ),
+			'previous' === $direction ? 'prev' : 'next',
+			esc_html( $link_text ),
+			'' !== $title ? ' <span class="' . esc_attr( $title_class ) . '">' . esc_html( $title ) . '</span>' : ''
+		);
 	}
 
 	/**
 	 * Get adjacent post using custom relationship order
 	 *
-	 * @param int    $current_post_id Current post ID.
-	 * @param string $cpt_slug        CPT slug.
-	 * @param string $taxonomy_slug   Taxonomy slug.
-	 * @param bool   $is_previous     True for previous, false for next.
+	 * @param int    $current_post_id  Current post ID.
+	 * @param string $cpt_slug         CPT slug.
+	 * @param string $taxonomy_slug    Taxonomy slug.
+	 * @param bool   $is_previous      True for previous, false for next.
 	 * @param bool   $use_custom_order Whether to use custom order.
 	 * @return WP_Post|null The adjacent post or null.
 	 */
 	public static function get_adjacent_post( $current_post_id, $cpt_slug, $taxonomy_slug, $is_previous, $use_custom_order = true ) {
-		// Get all terms assigned to the current post from the synced taxonomy.
-		$terms = wp_get_post_terms( $current_post_id, $taxonomy_slug, array( 'fields' => 'ids' ) );
+		$current_post_id = absint( $current_post_id );
+		$terms           = wp_get_post_terms( $current_post_id, $taxonomy_slug, array( 'fields' => 'ids' ) );
 
 		if ( is_wp_error( $terms ) || empty( $terms ) ) {
 			return null;
 		}
 
-		$parent_meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy_slug;
-		$order_meta_key  = '_cpt_tax_syncer_relationship_order_' . $taxonomy_slug;
+		$pair      = new CPT_Tax_Syncer_Pair( $cpt_slug, $taxonomy_slug );
+		$candidate = $use_custom_order ? self::best_saved_order( $pair, array_map( 'absint', $terms ), $current_post_id ) : null;
+		$term_id   = $candidate ? $candidate['term_id'] : (int) $terms[0];
 
-		// Collect all parent posts with custom orders that include this post.
-		$candidate_relationships = array();
+		$ordered_ids = CPT_Tax_Syncer_Post_Order::ordered_ids(
+			$term_id,
+			$taxonomy_slug,
+			(string) get_post_type( $current_post_id ),
+			$candidate ? $candidate['order'] : array()
+		);
 
-		foreach ( $terms as $term_id ) {
-			// Find the parent CPT post linked to this term.
-			$parent_posts = get_posts(
-				array(
-					'post_type'      => $cpt_slug,
-					'posts_per_page' => 1,
-					'post_status'    => 'publish',
-					'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-						array(
-							'key'   => $parent_meta_key,
-							'value' => $term_id,
-						),
-					),
-				)
-			);
-
-			if ( ! empty( $parent_posts ) ) {
-				$parent_post = $parent_posts[0];
-				$order       = get_post_meta( $parent_post->ID, $order_meta_key, true );
-
-				if ( is_array( $order ) && ! empty( $order ) ) {
-					// Ensure order contains integers for comparison.
-					$order               = array_map( 'absint', $order );
-					$current_post_id_int = absint( $current_post_id );
-					$current_position    = array_search( $current_post_id_int, $order, true );
-
-					if ( false !== $current_position ) {
-						// This parent has a custom order including the current post.
-						$candidate_relationships[] = array(
-							'parent_post'  => $parent_post,
-							'term_id'      => $term_id,
-							'order'        => $order,
-							'position'     => $current_position,
-							'order_length' => count( $order ),
-						);
-					}
-				}
-			}
-		}
-
-		// If we have candidates, pick the best one.
-		// Strategy: Use the one where current post appears earliest (most specific relationship).
-		// If tied, use the one with the longest order (most comprehensive).
-		$best_relationship = null;
-		if ( ! empty( $candidate_relationships ) && $use_custom_order ) {
-			usort(
-				$candidate_relationships,
-				function ( $a, $b ) {
-					// First, sort by position (earlier = better).
-					if ( $a['position'] !== $b['position'] ) {
-						return $a['position'] - $b['position'];
-					}
-					// If positions are equal, prefer longer orders (more comprehensive).
-					return $b['order_length'] - $a['order_length'];
-				}
-			);
-			$best_relationship = $candidate_relationships[0];
-		}
-
-		// Build the ordered posts list.
-		$all_ordered_posts = array();
-
-		// If we have a best relationship, use it with custom order.
-		if ( $best_relationship && $use_custom_order ) {
-			$saved_order = $best_relationship['order'];
-			$term_id     = $best_relationship['term_id'];
-
-			// Get all related posts that share this term.
-			$related_posts = get_posts(
-				array(
-					'post_type'      => get_post_type( $current_post_id ),
-					'posts_per_page' => -1,
-					'post_status'    => 'publish',
-					'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
-						array(
-							'taxonomy' => $taxonomy_slug,
-							'field'    => 'term_id',
-							'terms'    => $term_id,
-						),
-					),
-				)
-			);
-
-			if ( empty( $related_posts ) ) {
-				return null;
-			}
-
-			// Sort posts: first by saved order, then by menu_order.
-			$ordered_posts   = array();
-			$unordered_posts = array();
-
-			// Create a map of post IDs to posts.
-			$posts_map = array();
-			foreach ( $related_posts as $related_post ) {
-				$posts_map[ absint( $related_post->ID ) ] = $related_post;
-			}
-
-			// Add posts in saved order (ensure post IDs are integers).
-			foreach ( $saved_order as $post_id ) {
-				$post_id = absint( $post_id );
-				if ( isset( $posts_map[ $post_id ] ) ) {
-					$ordered_posts[] = $posts_map[ $post_id ];
-					unset( $posts_map[ $post_id ] );
-				}
-			}
-
-			// Add any remaining posts that weren't in the saved order.
-			foreach ( $posts_map as $related_post ) {
-				$unordered_posts[] = $related_post;
-			}
-
-			// Sort unordered posts by menu_order.
-			usort(
-				$unordered_posts,
-				function ( $a, $b ) {
-					$order_a = $a->menu_order ?? 0;
-					$order_b = $b->menu_order ?? 0;
-					if ( $order_a === $order_b ) {
-						return $a->ID - $b->ID;
-					}
-					return $order_a - $order_b;
-				}
-			);
-
-			// Combine ordered and unordered posts.
-			$all_ordered_posts = array_merge( $ordered_posts, $unordered_posts );
-		} else {
-			// No custom order found, use menu_order as fallback with first term.
-			$term_id = $terms[0];
-
-			// Get all related posts (same term, same post type as current).
-			$all_ordered_posts = get_posts(
-				array(
-					'post_type'      => get_post_type( $current_post_id ),
-					'posts_per_page' => -1,
-					'post_status'    => 'publish',
-					'orderby'        => 'menu_order',
-					'order'          => 'ASC',
-					'tax_query'      => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
-						array(
-							'taxonomy' => $taxonomy_slug,
-							'field'    => 'term_id',
-							'terms'    => $term_id,
-						),
-					),
-				)
-			);
-		}
-
-		// Find current post position in the ordered list.
-		$current_position = -1;
-		foreach ( $all_ordered_posts as $index => $related_post ) {
-			// Compare as integers to ensure type matching.
-			if ( absint( $related_post->ID ) === absint( $current_post_id ) ) {
-				$current_position = $index;
-				break;
-			}
-		}
-
-		// If current post not found in list, return null.
-		if ( -1 === $current_position ) {
+		$position = array_search( $current_post_id, $ordered_ids, true );
+		if ( false === $position ) {
 			return null;
 		}
 
-		// Get previous or next post based on direction.
-		if ( $is_previous && $current_position > 0 ) {
-			// Previous post (one position before).
-			return $all_ordered_posts[ $current_position - 1 ];
-		} elseif ( ! $is_previous && $current_position < count( $all_ordered_posts ) - 1 ) {
-			// Next post (one position after).
-			return $all_ordered_posts[ $current_position + 1 ];
+		$neighbour = $ordered_ids[ $is_previous ? $position - 1 : $position + 1 ] ?? 0;
+
+		return $neighbour ? get_post( $neighbour ) : null;
+	}
+
+	/**
+	 * The saved order that best covers the current post among the parents of its terms.
+	 *
+	 * Earliest position wins; on a tie the longer order does.
+	 *
+	 * @param CPT_Tax_Syncer_Pair $pair            The pair.
+	 * @param int[]               $term_ids        Terms the current post carries.
+	 * @param int                 $current_post_id The current post.
+	 * @return array{term_id:int,order:int[]}|null
+	 */
+	private static function best_saved_order( CPT_Tax_Syncer_Pair $pair, array $term_ids, int $current_post_id ): ?array {
+		$candidates = array();
+
+		foreach ( self::parent_posts_for_terms( $pair, $term_ids ) as $parent_id ) {
+			$order    = CPT_Tax_Syncer_Post_Order::saved_order( $parent_id, $pair->taxonomy_slug );
+			$position = array_search( $current_post_id, $order, true );
+
+			if ( false !== $position ) {
+				$candidates[] = array(
+					'term_id'  => (int) get_post_meta( $parent_id, $pair->post_meta_key(), true ),
+					'order'    => $order,
+					'position' => $position,
+					'length'   => count( $order ),
+				);
+			}
 		}
 
-		return null;
+		if ( empty( $candidates ) ) {
+			return null;
+		}
+
+		usort(
+			$candidates,
+			static function ( $a, $b ) {
+				return $a['position'] === $b['position'] ? $b['length'] - $a['length'] : $a['position'] - $b['position'];
+			}
+		);
+
+		return $candidates[0];
+	}
+
+	/**
+	 * IDs of the published parent posts linked to any of the terms (one query, meta primed).
+	 *
+	 * @param CPT_Tax_Syncer_Pair $pair     The pair.
+	 * @param int[]               $term_ids Term IDs.
+	 * @return int[]
+	 */
+	private static function parent_posts_for_terms( CPT_Tax_Syncer_Pair $pair, array $term_ids ): array {
+		$parent_ids = get_posts(
+			array(
+				'post_type'              => $pair->cpt_slug,
+				'post_status'            => CPT_Tax_Syncer_Post_Order::NAV_POST_STATUS,
+				'posts_per_page'         => count( $term_ids ),
+				'fields'                 => 'ids',
+				'no_found_rows'          => true,
+				'update_post_term_cache' => false,
+				'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- the meta link is the relationship.
+					array(
+						'key'     => $pair->post_meta_key(),
+						'value'   => $term_ids,
+						'compare' => 'IN',
+					),
+				),
+			)
+		);
+
+		if ( ! empty( $parent_ids ) ) {
+			update_meta_cache( 'post', $parent_ids );
+		}
+
+		return array_map( 'absint', $parent_ids );
 	}
 }

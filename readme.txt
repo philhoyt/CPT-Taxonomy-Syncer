@@ -13,7 +13,7 @@ Keeps a custom post type and a taxonomy in sync, and adds Query Loop and navigat
 
 == Description ==
 
-CPT-Taxonomy Syncer pairs a custom post type with a taxonomy and keeps the two in step. Creating a post creates a term with the same name; creating a term creates a post with the same title. Renaming either side renames the other. Deleting a post deletes its term, and deleting a term deletes its post. Each post and term stores the ID of its partner in meta, so the link survives title changes.
+CPT-Taxonomy Syncer pairs a custom post type with a taxonomy and keeps the two in step. Publishing a post creates a term with the same name; creating a term creates a post with the same title. Renaming either side renames the other. Deleting a post deletes its term, and deleting a term trashes its post. Each post and term stores the ID of its partner in meta, so the link survives title changes.
 
 The result is a taxonomy that mirrors the post type. Assign those terms to other content and you can query "everything tagged with this post" using normal WordPress taxonomy queries.
 
@@ -47,7 +47,15 @@ Go to Tools > CPT-Tax Syncer, click Add Pair, choose a post type and a taxonomy,
 
 = What happens when I create a post or a term? =
 
-Saving a post in a synced post type creates a term with the same name and links the two through meta. Creating a term creates a published post with the same title and the term description as its content. Auto-drafts and revisions are skipped; any other post status triggers the sync.
+Publishing a post in a synced post type creates a term with the same name and links the two through meta. Drafts, pending and private posts get no term, so their titles never appear in the public taxonomy (the `cpt_tax_syncer_synced_post_statuses` filter widens the list). Creating a term creates a published post with the same title and the term description as its initial content; editing the term later renames the post but leaves its content alone.
+
+= What happens when I delete a post or a term? =
+
+Deleting a post permanently deletes its term. Deleting a term moves its post to the trash, where it can be restored; trashing a post leaves its term in place until the trash is emptied.
+
+= Who can create posts through the taxonomy? =
+
+Anyone who can create, rename or delete a term in the paired taxonomy creates, renames or trashes a post in the paired post type, whatever their post capabilities. With the default taxonomy capabilities that is Editors and above. If you grant taxonomy capabilities to lower roles, use the `cpt_tax_syncer_before_sync_term_to_post` and `cpt_tax_syncer_before_sync_term_deletion_to_post` filters to require a post capability.
 
 = Can I sync content that already exists? =
 
@@ -85,6 +93,27 @@ Do not use `wp cpt-tax-syncer cleanup` for this. That command permanently delete
 2. The Relationships screen for a post type, with related posts in a custom order.
 
 == Changelog ==
+
+= Unreleased =
+* Fixed editing a term wiping the linked post's content: only the title follows the term now, and the description is copied only when the `cpt_tax_syncer_sync_term_description` filter opts in.
+* Fixed forcing REST support on a paired taxonomy wiping its labels, rewrite settings and other registration arguments. The plugin now bootstraps on `plugins_loaded`, so the `register_taxonomy_args` filter sees every registration.
+* Fixed the `/create-post` and `/create-term` REST routes letting any user with `edit_posts` publish into any post type or taxonomy. They now require the post type's `publish_posts` or the taxonomy's `manage_terms` capability and only accept a configured pair.
+* Fixed the Relationships screen REST route listing private and draft posts the caller may not read.
+* Fixed `per_page=0` crashing the relationship routes; page and page size are now validated by schema.
+* Fixed the batch routes accepting any transient name as a batch ID, and the batched sync polling forever when posts or terms were deleted mid-run.
+* Fixed a failed post insert being linked as post 0.
+* Fixed bulk Posts to Terms taking over a term already linked to another post, and writing only one side of the link.
+* Fixed a Query Loop block with "Use synced relationship" off occasionally inheriting the settings of an earlier relationship block on the same page, and the custom order being applied per page instead of across the whole result.
+* Fixed the Previous/Next Post (Relationship) blocks shipping no stylesheet; they now use colour, spacing and font-size block supports instead of hardcoded colours.
+* Fixed sorting the post list by Synced Term hiding posts without a term.
+* Drafts, pending and private posts no longer create terms, so unpublished titles stay out of the public taxonomy. The `cpt_tax_syncer_synced_post_statuses` filter restores the old behaviour.
+* Deleting a term now trashes its post instead of deleting it permanently.
+* Added keyboard reordering (Move up / Move down), screen-reader announcements and pagination to the Relationships screen, and announcements and a labelled progress bar to the manual sync.
+* Added the `cpt_tax_syncer_linked`, `cpt_tax_syncer_before_sync_post_deletion_to_term`, `cpt_tax_syncer_after_sync_post_deletion_to_term`, `cpt_tax_syncer_before_sync_term_deletion_to_post`, `cpt_tax_syncer_after_sync_term_deletion_to_post`, `cpt_tax_syncer_synced_post_statuses`, `cpt_tax_syncer_sync_term_description` and `cpt_tax_syncer_sync_error` hooks.
+* Removed the unused `relationshipDirection` key from the Relationship Query Loop variation and from the `cpt_tax_syncer_query_vars` filter payload.
+* Uninstall now also removes the cache-version option and the plugin's transients, on every site of a network.
+* Added a PHPUnit suite and a CI job that runs it, plus PHPCompatibility, readability metrics, jscpd and PHPMD checks.
+* Settings page, term-edit screen and block strings are now translatable; the admin script no longer depends on jQuery.
 
 = 1.4.4 =
 * Tested up to WordPress 7.1.

@@ -1,0 +1,71 @@
+/**
+ * Settings page and term-edit screen styles.
+ */
+
+.cpt-tax-syncer-manual-sync {
+	margin-top: 20px;
+}
+
+.cpt-tax-syncer-sync-result {
+	margin-top: 20px;
+
+	&:focus {
+		outline: 2px solid #2271b1;
+		outline-offset: 2px;
+	}
+}
+
+.cpt-tax-syncer-progress {
+	margin-top: 10px;
+
+	&__track {
+		background: #f0f0f1;
+		border-radius: 4px;
+		height: 24px;
+		margin-bottom: 8px;
+		overflow: hidden;
+	}
+
+	&__bar {
+		background: #2271b1;
+		height: 100%;
+		transition: width 0.3s;
+		width: 0;
+	}
+
+	&__text {
+		color: #646970;
+		font-size: 12px;
+	}
+}
+
+.cpt-tax-syncer-term-sync-info {
+
+	&__missing {
+		color: #d63638;
+	}
+}
+
+.cpt-tax-syncer-dev-reference {
+	background: #f0f0f1;
+	border-left: 4px solid #2271b1;
+	margin-top: 15px;
+	padding: 10px;
+
+	p {
+		margin: 0 0 8px;
+	}
+
+	&__key {
+		font-family: monospace;
+		font-size: 12px;
+		margin: 0 0 12px;
+
+		.description {
+			color: #646970;
+			display: inline-block;
+			font-size: 11px;
+			margin: 4px 0;
+		}
+	}
+}

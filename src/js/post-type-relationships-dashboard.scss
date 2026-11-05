@@ -1,0 +1,79 @@
+/**
+ * Relationships dashboard styles.
+ */
+
+.cpt-tax-syncer-dashboard {
+
+	&__loading {
+		align-items: center;
+		display: flex;
+		gap: 8px;
+	}
+
+	&__table {
+
+		.column-parent {
+			width: 30%;
+		}
+
+		.column-term {
+			width: 10%;
+		}
+
+		.column-related {
+			width: 60%;
+		}
+	}
+}
+
+.cpt-tax-syncer-related-posts {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.cpt-tax-syncer-related-post {
+	align-items: center;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	cursor: move;
+	display: flex;
+	gap: 8px;
+	margin: 4px 0;
+	padding: 4px 8px;
+
+	&.is-dragged {
+		background: #f0f0f0;
+		opacity: 0.5;
+	}
+
+	&.is-dragged-over {
+		background: #e5f5fa;
+		border: 2px dashed #0073aa;
+	}
+
+	&__position {
+		color: #646970;
+		display: inline-block;
+		font-weight: 600;
+		min-width: 30px;
+	}
+
+	&__controls {
+		display: inline-flex;
+		gap: 2px;
+		margin-inline-start: auto;
+	}
+}
+
+.cpt-tax-syncer-pagination {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	margin-top: 16px;
+
+	&__status {
+		color: #646970;
+	}
+}

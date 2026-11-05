@@ -1,6 +1,18 @@
 # Testing Guide for CPT-Taxonomy Syncer
 
-This guide explains how to test the plugin using WP-CLI commands.
+## Automated tests
+
+The PHPUnit suite in `tests/phpunit/` runs against the WordPress test suite inside wp-env:
+
+```bash
+npm install && composer install
+npm run env:start
+npm run test:php
+```
+
+It covers the sync hooks (create, rename, delete, trash, status rules, the recursion guards), the bulk sync with offsets and limits, every REST route's permissions and validation, the batch flow, the settings sanitizer, column sorting, the Query Loop integration and the adjacent-post lookup. `npm run test:php -- --filter Test_Sync_Hooks` runs one class.
+
+The rest of this guide covers the WP-CLI commands for checking larger datasets by hand.
 
 ## Prerequisites
 

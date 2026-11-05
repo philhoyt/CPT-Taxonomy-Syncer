@@ -10,6 +10,7 @@ module.exports = [
 			'lib/**',
 			'build/**',
 			'node_modules/**',
+			'plans/**',
 			'vendor/**',
 		],
 	},
@@ -24,6 +25,16 @@ module.exports = [
 			globals: {
 				...globals.browser,
 			},
+		},
+		rules: {
+			// Readability metrics. Warnings nudge a refactor; the commit gate blocks on errors only.
+			complexity: [ 'warn', 10 ],
+			'max-depth': [ 'warn', 4 ],
+			'max-params': [ 'warn', 4 ],
+			'max-lines-per-function': [
+				'warn',
+				{ max: 80, skipBlankLines: true, skipComments: true },
+			],
 		},
 	},
 ];

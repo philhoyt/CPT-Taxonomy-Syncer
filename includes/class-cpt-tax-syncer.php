@@ -2,7 +2,8 @@
 /**
  * Core CPT-Taxonomy Syncer class
  *
- * Handles the core syncing logic between custom post types and taxonomies
+ * Keeps one custom post type and one taxonomy in step through the
+ * save/update/delete hooks on both sides.
  *
  * @package CPT_Taxonomy_Syncer
  */
@@ -15,1014 +16,735 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Class CPT_Taxonomy_Syncer
  *
- * Handles synchronization between custom post types and taxonomies.
- * Creates posts for taxonomy terms and vice versa to maintain content parity.
+ * One instance per configured pair. Creates posts for taxonomy terms and
+ * vice versa, propagates renames and deletions, and owns the bidirectional
+ * meta link between a post and its term.
  *
  * @package CPT_Taxonomy_Syncer
+ *
+ * @SuppressWarnings(PHPMD.TooManyPublicMethods) -- six hook callbacks must be public, plus the link helpers the bulk sync and WP-CLI use.
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity) -- the complexity is the six symmetrical callbacks' guards; splitting them would hide the symmetry.
  */
 class CPT_Taxonomy_Syncer {
 	/**
-	 * The custom post type slug
-	 *
-	 * @var string
+	 * Bulk operation names, shared with the REST batch routes, WP-CLI and the admin script.
 	 */
-	private $cpt_slug;
+	const OPERATION_POSTS_TO_TERMS = 'posts-to-terms';
+	const OPERATION_TERMS_TO_POSTS = 'terms-to-posts';
 
 	/**
-	 * The taxonomy slug
+	 * The pair this instance syncs.
 	 *
-	 * @var string
+	 * @var CPT_Tax_Syncer_Pair
 	 */
-	private $taxonomy_slug;
+	private $pair;
 
 	/**
-	 * Whether to redirect taxonomy archive to CPT
+	 * Instances keyed by pair.
 	 *
-	 * @var bool
-	 */
-	private $enable_redirect;
-
-	/**
-	 * Static array of instances (for singleton pattern)
-	 *
-	 * @var array
+	 * @var array<string, CPT_Taxonomy_Syncer>
 	 */
 	private static $instances = array();
 
 	/**
-	 * Flag to prevent infinite recursion during deletion (per instance, not shared)
+	 * Recursion guard for deletions (per instance, not shared).
 	 *
 	 * @var bool
 	 */
 	private $is_deleting = false;
 
 	/**
-	 * Flag to prevent infinite recursion during updates (per instance, not shared)
+	 * Recursion guard for updates (per instance, not shared).
 	 *
 	 * @var bool
 	 */
 	private $is_updating = false;
 
 	/**
-	 * Array of term IDs that are being created from posts (to prevent reverse sync)
+	 * Term IDs that were created from posts, mapped to the post ID.
 	 *
-	 * @var array
+	 * @var array<int, int>
 	 */
 	private static $terms_created_from_posts = array();
 
 	/**
-	 * Array of post IDs that are currently creating terms (to prevent reverse sync)
+	 * Post IDs currently creating a term, mapped to the term name.
 	 *
-	 * @var array
+	 * The created_{taxonomy} hook fires before wp_insert_term() returns, so
+	 * the name is the only handle the term-side callback has at that moment.
+	 *
+	 * @var array<int, string>
 	 */
 	private static $posts_creating_terms = array();
 
 	/**
+	 * Term IDs currently creating a post.
+	 *
+	 * @var array<int, bool>
+	 */
+	private static $terms_creating_posts = array();
+
+	/**
 	 * Constructor
 	 *
-	 * @param string $cpt_slug The custom post type slug.
-	 * @param string $taxonomy_slug The taxonomy slug.
-	 * @param bool   $enable_redirect Whether to redirect taxonomy archive to CPT.
+	 * @param CPT_Tax_Syncer_Pair $pair The pair to sync.
 	 */
-	private function __construct( $cpt_slug, $taxonomy_slug, $enable_redirect = false ) {
-		$this->cpt_slug        = $cpt_slug;
-		$this->taxonomy_slug   = $taxonomy_slug;
-		$this->enable_redirect = $enable_redirect;
-
-		// Initialize hooks.
+	private function __construct( CPT_Tax_Syncer_Pair $pair ) {
+		$this->pair = $pair;
 		$this->init_hooks();
 	}
 
 	/**
-	 * Get an instance of the syncer (singleton pattern)
+	 * Get or create the instance for a pair.
 	 *
-	 * @param string $cpt_slug The custom post type slug.
-	 * @param string $taxonomy_slug The taxonomy slug.
-	 * @param bool   $enable_redirect Whether to redirect taxonomy archive to CPT.
-	 * @return CPT_Taxonomy_Syncer The instance
+	 * @param CPT_Tax_Syncer_Pair $pair The pair.
+	 * @return CPT_Taxonomy_Syncer
 	 */
-	public static function get_instance( $cpt_slug, $taxonomy_slug, $enable_redirect = false ) {
-		$key = $cpt_slug . '_' . $taxonomy_slug;
+	public static function get_instance( CPT_Tax_Syncer_Pair $pair ) {
+		$key = $pair->key();
 
 		if ( ! isset( self::$instances[ $key ] ) ) {
-			self::$instances[ $key ] = new self( $cpt_slug, $taxonomy_slug, $enable_redirect );
+			self::$instances[ $key ] = new self( $pair );
 		}
 
 		return self::$instances[ $key ];
 	}
 
 	/**
-	 * Initialize hooks
+	 * Get an existing instance by slugs.
+	 *
+	 * @param string $cpt_slug      The custom post type slug.
+	 * @param string $taxonomy_slug The taxonomy slug.
+	 * @return CPT_Taxonomy_Syncer|null
+	 */
+	public static function get_syncer_instance( $cpt_slug, $taxonomy_slug ) {
+		return self::$instances[ $cpt_slug . '_' . $taxonomy_slug ] ?? null;
+	}
+
+	/**
+	 * The two bulk operation names.
+	 *
+	 * @return string[]
+	 */
+	public static function operations(): array {
+		return array( self::OPERATION_POSTS_TO_TERMS, self::OPERATION_TERMS_TO_POSTS );
+	}
+
+	/**
+	 * The pair this instance syncs.
+	 *
+	 * @return CPT_Tax_Syncer_Pair
+	 */
+	public function pair(): CPT_Tax_Syncer_Pair {
+		return $this->pair;
+	}
+
+	/**
+	 * Hooks both sides of the pair.
 	 */
 	private function init_hooks() {
-		// Ensure taxonomy has REST API support using WordPress filters.
-		// Hook into taxonomy registration to add REST API support.
-		add_filter( 'register_taxonomy_args', array( $this, 'add_rest_support_to_taxonomy' ), 10, 2 );
-		// Also ensure REST support for already-registered taxonomies.
-		add_action( 'init', array( $this, 'ensure_taxonomy_rest_support' ), 20 );
+		$cpt_slug      = $this->pair->cpt_slug;
+		$taxonomy_slug = $this->pair->taxonomy_slug;
 
-		// Hook into post creation to sync to taxonomy.
-		add_action( 'save_post_' . $this->cpt_slug, array( $this, 'sync_post_to_term' ), 10, 3 );
-
-		// Hook into term creation to sync to post.
-		add_action( 'created_' . $this->taxonomy_slug, array( $this, 'sync_term_to_post' ), 10, 2 );
-
-		// Hook into term update to sync to post.
-		add_action( 'edited_' . $this->taxonomy_slug, array( $this, 'sync_term_update_to_post' ), 10, 2 );
-
-		// Hook into post update to sync to term.
+		add_action( 'save_post_' . $cpt_slug, array( $this, 'sync_post_to_term' ), 10, 3 );
+		add_action( 'created_' . $taxonomy_slug, array( $this, 'sync_term_to_post' ), 10, 2 );
+		add_action( 'edited_' . $taxonomy_slug, array( $this, 'sync_term_update_to_post' ), 10, 2 );
 		add_action( 'post_updated', array( $this, 'sync_post_update_to_term' ), 10, 3 );
-
-		// Hook into post deletion to sync to term.
 		add_action( 'before_delete_post', array( $this, 'sync_post_deletion_to_term' ) );
-
-		// Hook into term deletion to sync to post.
 		add_action( 'pre_delete_term', array( $this, 'sync_term_deletion_to_post' ), 10, 2 );
-
-		// Invalidate cache on post/term updates and deletions.
-		add_action( 'save_post_' . $this->cpt_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
-		add_action( 'delete_post', array( $this, 'invalidate_relationship_cache_on_delete' ), 999 );
-		add_action( 'created_' . $this->taxonomy_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
-		add_action( 'edited_' . $this->taxonomy_slug, array( $this, 'invalidate_relationship_cache' ), 999 );
-		add_action( 'pre_delete_term', array( $this, 'invalidate_relationship_cache_on_term_delete' ), 999, 2 );
-
-		// Add redirect for taxonomy archive if enabled.
-		if ( $this->enable_redirect ) {
-			add_action( 'template_redirect', array( $this, 'redirect_taxonomy_archive' ) );
-		}
 	}
 
 	/**
-	 * Add REST API support to taxonomy via filter (WordPress way)
+	 * Writes the post <-> term link on both sides.
 	 *
-	 * This filter is called when a taxonomy is registered, allowing us to
-	 * modify its arguments before registration.
-	 *
-	 * @param array  $args     Taxonomy registration arguments.
-	 * @param string $taxonomy Taxonomy slug.
-	 * @return array Modified taxonomy arguments.
+	 * @param int $post_id The post ID.
+	 * @param int $term_id The term ID.
 	 */
-	public function add_rest_support_to_taxonomy( $args, $taxonomy ) {
-		// Only modify our target taxonomy.
-		if ( $taxonomy !== $this->taxonomy_slug ) {
-			return $args;
-		}
+	public function link_post_and_term( int $post_id, int $term_id ): void {
+		update_post_meta( $post_id, $this->pair->post_meta_key(), $term_id );
+		update_term_meta( $term_id, $this->pair->term_meta_key(), $post_id );
 
-		// Ensure REST API support is enabled.
-		$args['show_in_rest'] = true;
-
-		// Set REST base to taxonomy slug if not already set.
-		if ( empty( $args['rest_base'] ) ) {
-			$args['rest_base'] = $this->taxonomy_slug;
-		}
-
-		// Set REST controller class if not already set.
-		if ( empty( $args['rest_controller_class'] ) ) {
-			$args['rest_controller_class'] = 'WP_REST_Terms_Controller';
-		}
-
-		return $args;
+		/**
+		 * Fires after a post and a term have been linked on both sides.
+		 *
+		 * @since 1.5.0
+		 *
+		 * @param int    $post_id       The post ID.
+		 * @param int    $term_id       The term ID.
+		 * @param string $cpt_slug      The custom post type slug.
+		 * @param string $taxonomy_slug The taxonomy slug.
+		 */
+		do_action( 'cpt_tax_syncer_linked', $post_id, $term_id, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 	}
 
 	/**
-	 * Ensure taxonomy has REST API support for already-registered taxonomies
+	 * Creates a term for a post and links the two.
 	 *
-	 * This function handles taxonomies that were registered before the plugin
-	 * loaded. It uses register_taxonomy() with updated args, which WordPress
-	 * will merge with existing registration.
+	 * The created_{taxonomy} callback is told to stand down so it does not
+	 * create a second post for the term.
+	 *
+	 * @param int    $post_id   The post ID.
+	 * @param string $term_name The term name.
+	 * @param array  $args      Extra wp_insert_term() arguments.
+	 * @return int|WP_Error The term ID.
 	 */
-	public function ensure_taxonomy_rest_support() {
-		// Check if taxonomy exists.
-		if ( ! taxonomy_exists( $this->taxonomy_slug ) ) {
-			return;
+	public function create_term_for_post( int $post_id, string $term_name, array $args = array() ) {
+		self::$posts_creating_terms[ $post_id ] = $term_name;
+
+		$result = wp_insert_term( $term_name, $this->pair->taxonomy_slug, $args );
+
+		unset( self::$posts_creating_terms[ $post_id ] );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
 		}
 
-		// Get current taxonomy object to check if REST is already enabled.
-		$taxonomy = get_taxonomy( $this->taxonomy_slug );
+		$term_id = (int) $result['term_id'];
 
-		if ( ! $taxonomy ) {
-			return;
-		}
+		self::$terms_created_from_posts[ $term_id ] = $post_id;
+		$this->link_post_and_term( $post_id, $term_id );
 
-		// If REST support is already enabled, no need to do anything.
-		if ( ! empty( $taxonomy->show_in_rest ) ) {
-			return;
-		}
+		return $term_id;
+	}
 
-		// Re-register taxonomy with REST API support.
-		// WordPress will merge these args with existing registration.
-		register_taxonomy(
-			$this->taxonomy_slug,
-			$taxonomy->object_type,
+	/**
+	 * Creates a published post for a term and links the two.
+	 *
+	 * @param WP_Term $term The term.
+	 * @return int|WP_Error The post ID.
+	 */
+	public function create_post_for_term( WP_Term $term ) {
+		self::$terms_creating_posts[ $term->term_id ] = true;
+
+		$post_id = wp_insert_post(
 			array(
-				'show_in_rest'          => true,
-				'rest_base'             => $this->taxonomy_slug,
-				'rest_controller_class' => 'WP_REST_Terms_Controller',
-			)
+				'post_title'   => $term->name,
+				'post_content' => $term->description,
+				'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
+				'post_type'    => $this->pair->cpt_slug,
+			),
+			true
 		);
+
+		unset( self::$terms_creating_posts[ $term->term_id ] );
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+
+		if ( $post_id <= 0 ) {
+			return new WP_Error( 'cpt_tax_syncer_post_not_created', __( 'The post could not be created.', 'cpt-taxonomy-syncer' ) );
+		}
+
+		$this->link_post_and_term( (int) $post_id, (int) $term->term_id );
+
+		return (int) $post_id;
 	}
 
 	/**
-	 * Sync post to term on post creation
+	 * Creates or links a term when a post in the paired type is saved.
 	 *
 	 * @param int     $post_id The post ID.
-	 * @param WP_Post $post The post object.
-	 * @param bool    $update Whether this is an update (unused but required by hook signature).
+	 * @param WP_Post $post    The post object.
+	 * @param bool    $update  Whether this is an update.
 	 */
-	public function sync_post_to_term( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-		// Skip auto-drafts and revisions.
-		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || 'auto-draft' === $post->post_status ) {
+	public function sync_post_to_term( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- save_post_{type} signature.
+		if ( ! $this->is_syncable_post( $post_id, $post ) ) {
 			return;
 		}
 
 		/**
-		 * Allow plugins to prevent or modify post-to-term sync.
+		 * Allow plugins to prevent post-to-term sync.
 		 *
 		 * @since 1.1.0
 		 *
-		 * @param bool    $should_sync Whether to proceed with sync. Default true.
-		 * @param int     $post_id     The post ID.
-		 * @param WP_Post $post        The post object.
-		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param bool    $should_sync   Whether to proceed with sync. Default true.
+		 * @param int     $post_id       The post ID.
+		 * @param WP_Post $post          The post object.
+		 * @param string  $cpt_slug      The custom post type slug.
 		 * @param string  $taxonomy_slug The taxonomy slug.
 		 */
-		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_post_to_term', true, $post_id, $post, $this->cpt_slug, $this->taxonomy_slug );
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_post_to_term', true, $post_id, $post, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 
 		if ( ! $should_sync ) {
 			return;
 		}
 
-		// Check if this post is already linked to a term.
-		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
-		$linked_term_id = get_post_meta( $post_id, $meta_key, true );
-
-		// If post is already linked to a term, skip (handled by sync_post_update_to_term for updates).
-		if ( $linked_term_id ) {
+		// A linked post is renamed through sync_post_update_to_term().
+		if ( get_post_meta( $post_id, $this->pair->post_meta_key(), true ) ) {
 			return;
 		}
 
-		// If this is marked as an update but the post isn't linked yet, it's likely transitioning
-		// from auto-draft to publish, so treat it as a new post creation and continue.
-
-		// Check if a term with this name already exists.
-		$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
-
-		if ( ! $term ) {
-			// No term exists, create a new one.
-			// Mark that this post is creating a term to prevent reverse sync.
-			self::$posts_creating_terms[ $post_id ] = $post->post_title;
-
-			$result = wp_insert_term( $post->post_title, $this->taxonomy_slug );
-
-			if ( ! is_wp_error( $result ) ) {
-				// Store the term ID in our tracking array.
-				self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
-				// Store post ID as term meta for future reference.
-				update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-				// Store term ID as post meta for future reference.
-				update_post_meta( $post_id, $meta_key, $result['term_id'] );
-				// Clean up post tracking.
-				unset( self::$posts_creating_terms[ $post_id ] );
-			} else {
-				// Clean up post tracking on error.
-				unset( self::$posts_creating_terms[ $post_id ] );
-			}
-		} else {
-			// Term exists, check if it's already linked to a different post.
-			$linked_post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-
-			if ( $linked_post_id && (int) $linked_post_id !== (int) $post_id ) {
-				// Term is already linked to a different post.
-				// Create a new term using the post slug to differentiate.
-				$post_slug = $post->post_name;
-				$term_name = $post->post_title;
-
-				// If slug is different from title, append it to make term unique.
-				if ( $post_slug && sanitize_title( $post->post_title ) !== $post_slug ) {
-					$term_name = $post->post_title . ' (' . $post_slug . ')';
-				} else {
-					// If slug matches title, append post ID to ensure uniqueness.
-					$term_name = $post->post_title . ' (ID: ' . $post_id . ')';
-				}
-
-				// Mark that this post is creating a term to prevent reverse sync.
-				self::$posts_creating_terms[ $post_id ] = $term_name;
-
-				$result = wp_insert_term( $term_name, $this->taxonomy_slug, array( 'slug' => $post_slug ) );
-
-				if ( ! is_wp_error( $result ) ) {
-					// Store the term ID in our tracking array.
-					self::$terms_created_from_posts[ $result['term_id'] ] = $post_id;
-					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, $meta_key, $result['term_id'] );
-					// Clean up post tracking.
-					unset( self::$posts_creating_terms[ $post_id ] );
-				} else {
-					// Clean up post tracking on error.
-					unset( self::$posts_creating_terms[ $post_id ] );
-				}
-			} else {
-				// Term exists but is not linked, or is linked to this same post.
-				// Link this post to the existing term.
-				update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-				update_post_meta( $post_id, $meta_key, $term->term_id );
-			}
-		}
+		$this->link_or_create_term( (int) $post_id, $post );
 
 		/**
 		 * Fires after a post has been synced to a term.
 		 *
 		 * @since 1.1.0
 		 *
-		 * @param int     $post_id     The post ID.
-		 * @param WP_Post $post        The post object.
-		 * @param int     $term_id     The term ID that was linked (or null if sync failed).
-		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param int     $post_id       The post ID.
+		 * @param WP_Post $post          The post object.
+		 * @param int     $term_id       The term ID that was linked (empty if sync failed).
+		 * @param string  $cpt_slug      The custom post type slug.
 		 * @param string  $taxonomy_slug The taxonomy slug.
 		 */
-		$final_term_id = get_post_meta( $post_id, $meta_key, true );
-		do_action( 'cpt_tax_syncer_after_sync_post_to_term', $post_id, $post, $final_term_id, $this->cpt_slug, $this->taxonomy_slug );
+		$final_term_id = get_post_meta( $post_id, $this->pair->post_meta_key(), true );
+		do_action( 'cpt_tax_syncer_after_sync_post_to_term', $post_id, $post, $final_term_id, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 	}
 
 	/**
-	 * Sync term to post on term creation
+	 * Links a post to the term with its title, creating one when needed.
 	 *
-	 * @param int $term_id The term ID.
-	 * @param int $tt_id   The term taxonomy ID (unused).
+	 * A term already linked to another post is left alone and the post gets
+	 * a term whose name carries the post slug (or ID) to stay unique.
+	 *
+	 * @param int     $post_id The post ID.
+	 * @param WP_Post $post    The post object.
 	 */
-	public function sync_term_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-		// Skip if this term was created from a post (prevents reverse sync creating duplicate posts).
-		if ( isset( self::$terms_created_from_posts[ $term_id ] ) ) {
-			// Check if meta is set - if so, clean up flag. If not, it will be set soon.
-			$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-			if ( $linked_post_id ) {
-				// Meta is set, we can safely remove the flag.
-				unset( self::$terms_created_from_posts[ $term_id ] );
-			}
+	private function link_or_create_term( int $post_id, WP_Post $post ): void {
+		$term = get_term_by( 'name', $post->post_title, $this->pair->taxonomy_slug );
+
+		if ( ! $term ) {
+			$this->create_term_for_post( $post_id, $post->post_title );
 			return;
 		}
 
-		// Also check if there's a post currently creating a term with this name.
-		$term = get_term( $term_id, $this->taxonomy_slug );
+		if ( isset( self::$terms_creating_posts[ $term->term_id ] ) ) {
+			return; // create_post_for_term() links both sides when the insert returns.
+		}
+
+		$linked_post_id = (int) get_term_meta( $term->term_id, $this->pair->term_meta_key(), true );
+
+		if ( $linked_post_id && $linked_post_id !== $post_id ) {
+			$this->create_term_for_post( $post_id, $this->unique_term_name( $post ), array( 'slug' => $post->post_name ) );
+			return;
+		}
+
+		$this->link_post_and_term( $post_id, (int) $term->term_id );
+	}
+
+	/**
+	 * A term name for a post whose title is already taken by another post's term.
+	 *
+	 * @param WP_Post $post The post.
+	 * @return string
+	 */
+	private function unique_term_name( WP_Post $post ): string {
+		if ( $post->post_name && sanitize_title( $post->post_title ) !== $post->post_name ) {
+			return $post->post_title . ' (' . $post->post_name . ')';
+		}
+
+		return $post->post_title . ' (ID: ' . $post->ID . ')';
+	}
+
+	/**
+	 * Whether a saved post should get a term.
+	 *
+	 * Autosaves, revisions and auto-drafts never sync. Beyond that only the
+	 * statuses on the allow-list do, so titles of drafts and private posts
+	 * never land in the (public) taxonomy.
+	 *
+	 * @param int     $post_id The post ID.
+	 * @param WP_Post $post    The post.
+	 * @return bool
+	 */
+	private function is_syncable_post( $post_id, $post ): bool {
+		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || 'auto-draft' === $post->post_status ) {
+			return false;
+		}
 
 		/**
-		 * Allow plugins to prevent or modify term-to-post sync.
+		 * Filters the post statuses that create a term.
+		 *
+		 * @since 1.5.0
+		 *
+		 * @param string[]            $statuses Default array( 'publish' ).
+		 * @param CPT_Tax_Syncer_Pair $pair     The pair.
+		 */
+		$statuses = (array) apply_filters( 'cpt_tax_syncer_synced_post_statuses', array( CPT_TAX_SYNCER_DEFAULT_POST_STATUS ), $this->pair );
+
+		return in_array( $post->post_status, $statuses, true );
+	}
+
+	/**
+	 * Creates or links a post when a term in the paired taxonomy is created.
+	 *
+	 * @param int $term_id The term ID.
+	 * @param int $tt_id   The term taxonomy ID.
+	 */
+	public function sync_term_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- created_{taxonomy} signature.
+		$term = get_term( $term_id, $this->pair->taxonomy_slug );
+
+		if ( ! $term instanceof WP_Term || $this->is_term_created_from_post( (int) $term_id, $term ) ) {
+			return;
+		}
+
+		/**
+		 * Allow plugins to prevent term-to-post sync.
 		 *
 		 * @since 1.1.0
 		 *
-		 * @param bool    $should_sync Whether to proceed with sync. Default true.
-		 * @param int     $term_id     The term ID.
-		 * @param WP_Term $term        The term object.
-		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param bool    $should_sync   Whether to proceed with sync. Default true.
+		 * @param int     $term_id       The term ID.
+		 * @param WP_Term $term          The term object.
+		 * @param string  $cpt_slug      The custom post type slug.
 		 * @param string  $taxonomy_slug The taxonomy slug.
 		 */
-		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_term_to_post', true, $term_id, $term, $this->cpt_slug, $this->taxonomy_slug );
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_term_to_post', true, $term_id, $term, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 
 		if ( ! $should_sync ) {
 			return;
 		}
-		if ( $term && ! is_wp_error( $term ) ) {
-			foreach ( self::$posts_creating_terms as $creating_post_id => $creating_term_name ) {
-				if ( $creating_term_name === $term->name ) {
-					return;
-				}
-			}
-		}
 
-		// Get the term.
-		$term = get_term( $term_id, $this->taxonomy_slug );
-
-		if ( ! $term || is_wp_error( $term ) ) {
-			return;
-		}
-
-		// First check if term is already linked to a post via meta (most reliable).
-		// This prevents creating duplicate posts when term was created from a post.
-		$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-
-		if ( $linked_post_id ) {
-			// Term is already linked to a post, verify the post exists and link is correct.
-			$linked_post = get_post( $linked_post_id );
-			if ( $linked_post && $linked_post->post_type === $this->cpt_slug ) {
-				// Ensure bidirectional link is set.
-				update_post_meta( $linked_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
-				return;
-			}
-		}
-
-		// Check if a post linked to this term already exists (by meta or title).
-		$existing_post = $this->find_post_by_term( $term_id, $term->name );
-
-		if ( ! $existing_post ) {
-			// Create a new post.
-			$post_id = wp_insert_post(
-				array(
-					'post_title'   => $term->name,
-					'post_content' => $term->description,
-					'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-					'post_type'    => $this->cpt_slug,
-				)
-			);
-
-			if ( ! is_wp_error( $post_id ) ) {
-				// Store term ID as post meta for future reference.
-				update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
-
-				// Store post ID as term meta for future reference.
-				update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-			}
-		} else {
-			// Post exists but may not have meta relationship - ensure it's linked.
-			$existing_post_id = $existing_post->ID;
-			update_post_meta( $existing_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
-			update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $existing_post_id );
-		}
+		$this->link_or_create_post( $term );
 
 		/**
 		 * Fires after a term has been synced to a post.
 		 *
 		 * @since 1.1.0
 		 *
-		 * @param int     $term_id     The term ID.
-		 * @param WP_Term $term        The term object.
-		 * @param int     $post_id     The post ID that was linked (or null if sync failed).
-		 * @param string  $cpt_slug    The custom post type slug.
+		 * @param int     $term_id       The term ID.
+		 * @param WP_Term $term          The term object.
+		 * @param int     $post_id       The post ID that was linked (empty if sync failed).
+		 * @param string  $cpt_slug      The custom post type slug.
 		 * @param string  $taxonomy_slug The taxonomy slug.
 		 */
-		$final_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-		do_action( 'cpt_tax_syncer_after_sync_term_to_post', $term_id, $term, $final_post_id, $this->cpt_slug, $this->taxonomy_slug );
+		$final_post_id = get_term_meta( $term_id, $this->pair->term_meta_key(), true );
+		do_action( 'cpt_tax_syncer_after_sync_term_to_post', $term_id, $term, $final_post_id, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 	}
 
 	/**
-	 * Sync post update to term
+	 * Links a term to its post, creating one when no post matches.
 	 *
-	 * @param int     $post_id The post ID.
-	 * @param WP_Post $post_after The post object after the update.
+	 * @param WP_Term $term The term.
+	 */
+	private function link_or_create_post( WP_Term $term ): void {
+		$linked_post_id = (int) get_term_meta( $term->term_id, $this->pair->term_meta_key(), true );
+
+		if ( $linked_post_id && $this->is_post_in_pair( $linked_post_id ) ) {
+			$this->link_post_and_term( $linked_post_id, (int) $term->term_id );
+			return;
+		}
+
+		$existing_post = $this->find_post_by_term( (int) $term->term_id, $term->name );
+
+		if ( $existing_post ) {
+			$this->link_post_and_term( (int) $existing_post->ID, (int) $term->term_id );
+			return;
+		}
+
+		$this->create_post_for_term( $term );
+	}
+
+	/**
+	 * Whether a term is being, or was, created by the post side of this sync.
+	 *
+	 * @param int     $term_id The term ID.
+	 * @param WP_Term $term    The term.
+	 * @return bool
+	 */
+	private function is_term_created_from_post( int $term_id, WP_Term $term ): bool {
+		if ( isset( self::$terms_created_from_posts[ $term_id ] ) ) {
+			if ( get_term_meta( $term_id, $this->pair->term_meta_key(), true ) ) {
+				unset( self::$terms_created_from_posts[ $term_id ] );
+			}
+			return true;
+		}
+
+		return in_array( $term->name, self::$posts_creating_terms, true );
+	}
+
+	/**
+	 * Whether a post exists and belongs to the paired post type.
+	 *
+	 * @param int $post_id The post ID.
+	 * @return bool
+	 */
+	private function is_post_in_pair( int $post_id ): bool {
+		$post = get_post( $post_id );
+
+		return $post instanceof WP_Post && $post->post_type === $this->pair->cpt_slug;
+	}
+
+	/**
+	 * Renames the linked term when the post title changes.
+	 *
+	 * @param int     $post_id     The post ID.
+	 * @param WP_Post $post_after  The post object after the update.
 	 * @param WP_Post $post_before The post object before the update.
 	 */
 	public function sync_post_update_to_term( $post_id, $post_after, $post_before ) {
-		// Prevent infinite recursion.
-		if ( $this->is_updating ) {
+		if ( $this->is_updating || get_post_type( $post_id ) !== $this->pair->cpt_slug ) {
 			return;
 		}
 
-		// Only process our CPT.
-		if ( get_post_type( $post_id ) !== $this->cpt_slug ) {
-			return;
-		}
-
-		// Skip auto-drafts and revisions.
 		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) || 'auto-draft' === $post_after->post_status ) {
 			return;
 		}
 
-		// Check if the title has changed.
-		if ( $post_after->post_title !== $post_before->post_title ) {
-			// Set the update flag to prevent recursion.
-			$this->is_updating = true;
-
-			// Find the linked term via post meta first (authoritative link).
-			$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
-			$linked_term_id = get_post_meta( $post_id, $meta_key, true );
-			$term           = null;
-
-			if ( $linked_term_id ) {
-				$term = get_term( $linked_term_id, $this->taxonomy_slug );
-				if ( is_wp_error( $term ) ) {
-					$term = null;
-				}
-			}
-
-			// Fallback: find by old title if no meta relationship exists.
-			if ( ! $term ) {
-				$term = get_term_by( 'name', $post_before->post_title, $this->taxonomy_slug );
-				if ( is_wp_error( $term ) ) {
-					$term = null;
-				}
-			}
-
-			if ( $term ) {
-				// Update the term.
-				wp_update_term(
-					$term->term_id,
-					$this->taxonomy_slug,
-					array(
-						'name' => $post_after->post_title,
-						'slug' => sanitize_title( $post_after->post_title ),
-					)
-				);
-			} else {
-				// Term doesn't exist, create it.
-				$result = wp_insert_term( $post_after->post_title, $this->taxonomy_slug );
-
-				if ( ! is_wp_error( $result ) ) {
-					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, $meta_key, $result['term_id'] );
-				}
-			}
-
-			// Reset the update flag.
-			$this->is_updating = false;
-		}
-	}
-
-	/**
-	 * Sync term update to post
-	 *
-	 * @param int $term_id The term ID.
-	 * @param int $tt_id The term taxonomy ID.
-	 */
-	public function sync_term_update_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-		// Prevent infinite recursion.
-		if ( $this->is_updating ) {
+		if ( $post_after->post_title === $post_before->post_title ) {
 			return;
 		}
 
-		// Get the term.
-		$term = get_term( $term_id, $this->taxonomy_slug );
-
-		if ( ! $term || is_wp_error( $term ) ) {
-			return;
-		}
-
-		// Get the associated post ID from term meta.
-		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-
-		// Set the update flag to prevent recursion.
 		$this->is_updating = true;
 
-		if ( $post_id ) {
-			// Update the post.
-			$result = wp_update_post(
+		$term = $this->find_linked_term( (int) $post_id, $post_before->post_title );
+
+		if ( $term ) {
+			wp_update_term(
+				$term->term_id,
+				$this->pair->taxonomy_slug,
 				array(
-					'ID'           => $post_id,
-					'post_title'   => $term->name,
-					'post_content' => $term->description,
+					'name' => $post_after->post_title,
+					'slug' => sanitize_title( $post_after->post_title ),
 				)
 			);
-
-			// Check for errors (though wp_update_post returns post ID or WP_Error).
-			if ( is_wp_error( $result ) && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// Log error in debug mode.
-				error_log( 'CPT-Tax Syncer: Failed to update post ' . $post_id . ': ' . $result->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			}
-		} else {
-			// No associated post, create one.
-			$post_id = wp_insert_post(
-				array(
-					'post_title'   => $term->name,
-					'post_content' => $term->description,
-					'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-					'post_type'    => $this->cpt_slug,
-				)
-			);
-
-			if ( ! is_wp_error( $post_id ) ) {
-				// Store term ID as post meta for future reference.
-				update_post_meta( $post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug, $term_id );
-
-				// Store post ID as term meta for future reference.
-				update_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-			}
+		} elseif ( $this->is_syncable_post( $post_id, $post_after ) ) {
+			$this->create_term_for_post( (int) $post_id, $post_after->post_title );
 		}
 
-		// Reset the update flag.
 		$this->is_updating = false;
 	}
 
 	/**
-	 * Sync post deletion to term
+	 * The term linked to a post: by meta first, then by the post's previous title.
+	 *
+	 * @param int    $post_id        The post ID.
+	 * @param string $fallback_title Title to look up when no meta link exists.
+	 * @return WP_Term|null
+	 */
+	private function find_linked_term( int $post_id, string $fallback_title ): ?WP_Term {
+		$linked_term_id = (int) get_post_meta( $post_id, $this->pair->post_meta_key(), true );
+
+		$term = $linked_term_id ? get_term( $linked_term_id, $this->pair->taxonomy_slug ) : null;
+		if ( ! $term instanceof WP_Term ) {
+			$term = get_term_by( 'name', $fallback_title, $this->pair->taxonomy_slug );
+		}
+
+		return $term instanceof WP_Term ? $term : null;
+	}
+
+	/**
+	 * Renames the linked post when the term changes, or creates one if none is linked.
+	 *
+	 * Only the title follows the term. The description is copied into the
+	 * post content only when the cpt_tax_syncer_sync_term_description filter
+	 * opts in, because the post content is normally block-editor content the
+	 * term knows nothing about.
+	 *
+	 * @param int $term_id The term ID.
+	 * @param int $tt_id   The term taxonomy ID.
+	 */
+	public function sync_term_update_to_post( $term_id, $tt_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- edited_{taxonomy} signature.
+		if ( $this->is_updating ) {
+			return;
+		}
+
+		$term = get_term( $term_id, $this->pair->taxonomy_slug );
+		if ( ! $term instanceof WP_Term ) {
+			return;
+		}
+
+		$this->is_updating = true;
+
+		$post_id = (int) get_term_meta( $term_id, $this->pair->term_meta_key(), true );
+
+		if ( $post_id && $this->is_post_in_pair( $post_id ) ) {
+			$this->update_post_from_term( $post_id, $term );
+		} else {
+			$this->create_post_for_term( $term );
+		}
+
+		$this->is_updating = false;
+	}
+
+	/**
+	 * Applies a term's name (and, when opted in, description) to its post.
+	 *
+	 * @param int     $post_id The post ID.
+	 * @param WP_Term $term    The term.
+	 */
+	private function update_post_from_term( int $post_id, WP_Term $term ): void {
+		$postarr = array(
+			'ID'         => $post_id,
+			'post_title' => $term->name,
+		);
+
+		/**
+		 * Filters whether the term description overwrites the post content on term edits.
+		 *
+		 * @since 1.5.0
+		 *
+		 * @param bool                $sync_description Default false.
+		 * @param WP_Term             $term             The term.
+		 * @param int                 $post_id          The post ID.
+		 * @param CPT_Tax_Syncer_Pair $pair             The pair.
+		 */
+		if ( apply_filters( 'cpt_tax_syncer_sync_term_description', false, $term, $post_id, $this->pair ) ) {
+			$postarr['post_content'] = $term->description;
+		}
+
+		$result = wp_update_post( $postarr, true );
+
+		if ( is_wp_error( $result ) ) {
+			/**
+			 * Fires when a sync write fails.
+			 *
+			 * @since 1.5.0
+			 *
+			 * @param WP_Error $result  The error.
+			 * @param int      $post_id The post ID.
+			 * @param WP_Term  $term    The term.
+			 */
+			do_action( 'cpt_tax_syncer_sync_error', $result, $post_id, $term );
+		}
+	}
+
+	/**
+	 * Deletes the linked term when a post in the paired type is permanently deleted.
+	 *
+	 * Trashing a post leaves its term in place; the term goes when the trash is emptied.
 	 *
 	 * @param int $post_id The post ID.
 	 */
 	public function sync_post_deletion_to_term( $post_id ) {
-		// Prevent infinite recursion.
-		if ( $this->is_deleting ) {
+		if ( $this->is_deleting || get_post_type( $post_id ) !== $this->pair->cpt_slug ) {
 			return;
 		}
 
-		// Only process our CPT.
-		if ( get_post_type( $post_id ) !== $this->cpt_slug ) {
-			return;
-		}
-
-		// Set the deletion flag.
 		$this->is_deleting = true;
 
-		// Find the corresponding term using the meta relationship (most reliable).
-		// This works even when term names are modified for duplicate titles.
-		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
-		$term_id  = get_post_meta( $post_id, $meta_key, true );
+		$term = $this->find_term_owned_by_post( (int) $post_id );
 
-		if ( $term_id ) {
-			// Verify the term exists and is linked to this post.
-			$term = get_term( $term_id, $this->taxonomy_slug );
+		/**
+		 * Allow plugins to keep the term when its post is deleted.
+		 *
+		 * @since 1.5.0
+		 *
+		 * @param bool         $should_sync   Whether to delete the term. Default true.
+		 * @param int          $post_id       The post ID.
+		 * @param WP_Term|null $term          The linked term, or null.
+		 * @param string       $cpt_slug      The custom post type slug.
+		 * @param string       $taxonomy_slug The taxonomy slug.
+		 */
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_post_deletion_to_term', true, $post_id, $term, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 
-			if ( $term && ! is_wp_error( $term ) ) {
-				// Double-check the term is linked to this post (safety check).
-				$linked_post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
+		if ( $should_sync && $term ) {
+			wp_delete_term( $term->term_id, $this->pair->taxonomy_slug );
 
-				if ( (int) $linked_post_id === (int) $post_id ) {
-					// Delete the term.
-					wp_delete_term( $term_id, $this->taxonomy_slug );
-				}
-			}
-		} else {
-			// Fallback: try to find term by post title (for legacy data without meta).
-			$post = get_post( $post_id );
-			if ( $post ) {
-				$term = get_term_by( 'name', $post->post_title, $this->taxonomy_slug );
-
-				// Delete the term if it exists and is not linked to a different post.
-				if ( $term && ! is_wp_error( $term ) ) {
-					$linked_post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-
-					// Only delete if not linked or linked to this post.
-					if ( ! $linked_post_id || (int) $linked_post_id === (int) $post_id ) {
-						wp_delete_term( $term->term_id, $this->taxonomy_slug );
-					}
-				}
-			}
+			/**
+			 * Fires after a post deletion has removed its term.
+			 *
+			 * @since 1.5.0
+			 *
+			 * @param int     $post_id       The post ID.
+			 * @param WP_Term $term          The deleted term.
+			 * @param string  $cpt_slug      The custom post type slug.
+			 * @param string  $taxonomy_slug The taxonomy slug.
+			 */
+			do_action( 'cpt_tax_syncer_after_sync_post_deletion_to_term', $post_id, $term, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 		}
 
-		// Reset the deletion flag.
 		$this->is_deleting = false;
 	}
 
 	/**
-	 * Sync term deletion to post
+	 * The term a post owns: linked back by meta, or (legacy data) named after the
+	 * post and not linked to anyone else.
 	 *
-	 * @param int    $term_id The term ID.
+	 * @param int $post_id The post ID.
+	 * @return WP_Term|null
+	 */
+	private function find_term_owned_by_post( int $post_id ): ?WP_Term {
+		$term_id = (int) get_post_meta( $post_id, $this->pair->post_meta_key(), true );
+
+		if ( $term_id ) {
+			$term = get_term( $term_id, $this->pair->taxonomy_slug );
+		} else {
+			$post = get_post( $post_id );
+			$term = $post ? get_term_by( 'name', $post->post_title, $this->pair->taxonomy_slug ) : null;
+		}
+
+		if ( ! $term instanceof WP_Term ) {
+			return null;
+		}
+
+		$linked_post_id = (int) get_term_meta( $term->term_id, $this->pair->term_meta_key(), true );
+		$owns_it        = $term_id ? $linked_post_id === $post_id : ( ! $linked_post_id || $linked_post_id === $post_id );
+
+		return $owns_it ? $term : null;
+	}
+
+	/**
+	 * Trashes (or, with the trash disabled, deletes) the linked post when a term is deleted.
+	 *
+	 * @param int    $term_id  The term ID.
 	 * @param string $taxonomy The taxonomy slug.
 	 */
 	public function sync_term_deletion_to_post( $term_id, $taxonomy ) {
-		// Prevent infinite recursion.
-		if ( $this->is_deleting ) {
+		if ( $this->is_deleting || $taxonomy !== $this->pair->taxonomy_slug ) {
 			return;
 		}
 
-		// Only process our taxonomy.
-		if ( $taxonomy !== $this->taxonomy_slug ) {
-			return;
-		}
-
-		// Set the deletion flag.
 		$this->is_deleting = true;
 
-		// Get the associated post ID from term meta.
-		$post_id = get_term_meta( $term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
+		$post_id = (int) get_term_meta( $term_id, $this->pair->term_meta_key(), true );
 
-		// Delete the post if it exists.
-		if ( $post_id ) {
-			wp_delete_post( $post_id, true );
+		/**
+		 * Allow plugins to keep the post when its term is deleted.
+		 *
+		 * @since 1.5.0
+		 *
+		 * @param bool   $should_sync   Whether to trash the post. Default true.
+		 * @param int    $term_id       The term ID.
+		 * @param int    $post_id       The linked post ID (0 when none).
+		 * @param string $cpt_slug      The custom post type slug.
+		 * @param string $taxonomy_slug The taxonomy slug.
+		 */
+		$should_sync = apply_filters( 'cpt_tax_syncer_before_sync_term_deletion_to_post', true, $term_id, $post_id, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
+
+		if ( $should_sync && $post_id && $this->is_post_in_pair( $post_id ) ) {
+			if ( EMPTY_TRASH_DAYS > 0 ) {
+				wp_trash_post( $post_id );
+			} else {
+				wp_delete_post( $post_id, true );
+			}
+
+			/**
+			 * Fires after a term deletion has trashed or deleted its post.
+			 *
+			 * @since 1.5.0
+			 *
+			 * @param int    $term_id       The term ID.
+			 * @param int    $post_id       The post ID.
+			 * @param string $cpt_slug      The custom post type slug.
+			 * @param string $taxonomy_slug The taxonomy slug.
+			 */
+			do_action( 'cpt_tax_syncer_after_sync_term_deletion_to_post', $term_id, $post_id, $this->pair->cpt_slug, $this->pair->taxonomy_slug );
 		}
 
-		// Reset the deletion flag.
 		$this->is_deleting = false;
 	}
 
 	/**
-	 * Invalidate relationship cache when post/term is updated.
+	 * The post linked to a term by meta, falling back to an exact title match.
 	 *
-	 * @param int $object_id Post or term ID.
+	 * @param int    $term_id The term ID.
+	 * @param string $title   Title to match when no meta link exists.
+	 * @return WP_Post|null
 	 */
-	public function invalidate_relationship_cache( $object_id ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-		CPT_Tax_Syncer_REST_Controller::invalidate_cache();
-	}
-
-	/**
-	 * Invalidate relationship cache when post is deleted.
-	 *
-	 * @param int $post_id Post ID.
-	 */
-	public function invalidate_relationship_cache_on_delete( $post_id ) {
-		// Only invalidate if it's our CPT.
-		if ( get_post_type( $post_id ) === $this->cpt_slug ) {
-			CPT_Tax_Syncer_REST_Controller::invalidate_cache();
-		}
-	}
-
-	/**
-	 * Invalidate relationship cache when term is deleted.
-	 *
-	 * @param int    $term_id Term ID.
-	 * @param string $taxonomy Taxonomy slug.
-	 */
-	public function invalidate_relationship_cache_on_term_delete( $term_id, $taxonomy ) {
-		// Only invalidate if it's our taxonomy.
-		if ( $taxonomy === $this->taxonomy_slug ) {
-			CPT_Tax_Syncer_REST_Controller::invalidate_cache();
-		}
-	}
-
-	/**
-	 * Redirect taxonomy archive to corresponding CPT post
-	 *
-	 * This function redirects taxonomy archive pages to their corresponding CPT post
-	 */
-	public function redirect_taxonomy_archive() {
-		// Check if we're on a taxonomy archive page for our taxonomy.
-		if ( is_tax( $this->taxonomy_slug ) ) {
-			// Get the current term.
-			$term = get_queried_object();
-
-			if ( $term && ! is_wp_error( $term ) ) {
-				// Get the associated post ID from term meta.
-				$post_id = get_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, true );
-
-				if ( $post_id ) {
-					// Redirect to the post.
-					wp_safe_redirect( get_permalink( $post_id ), 301 );
-					exit;
-				}
-			}
-		}
-	}
-
-	/**
-	 * Get total count of posts to sync
-	 *
-	 * @return int Total post count
-	 */
-	public function get_posts_count() {
-		$count = wp_count_posts( $this->cpt_slug );
-		return isset( $count->{CPT_TAX_SYNCER_DEFAULT_POST_STATUS} ) ? (int) $count->{CPT_TAX_SYNCER_DEFAULT_POST_STATUS} : 0;
-	}
-
-	/**
-	 * Get total count of terms to sync
-	 *
-	 * @return int Total term count
-	 */
-	public function get_terms_count() {
-		$terms = get_terms(
+	private function find_post_by_term( int $term_id, string $title ): ?WP_Post {
+		$posts = get_posts(
 			array(
-				'taxonomy'   => $this->taxonomy_slug,
-				'hide_empty' => false,
-				'fields'     => 'count',
-			)
-		);
-		return is_wp_error( $terms ) ? 0 : (int) $terms;
-	}
-
-	/**
-	 * Bulk sync all posts to terms
-	 *
-	 * @param int $offset Offset for pagination (default: 0).
-	 * @param int $limit  Limit for pagination (default: -1 for all).
-	 * @return array Results array with synced count and errors
-	 */
-	public function bulk_sync_posts_to_terms( $offset = 0, $limit = -1 ) {
-		// Get posts with pagination support.
-		$args = array(
-			'post_type'      => $this->cpt_slug,
-			'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-			'posts_per_page' => $limit > 0 ? $limit : -1,
-			'offset'         => $offset,
-			'no_found_rows'  => true, // Performance optimization.
-		);
-
-		$posts = get_posts( $args );
-
-		if ( empty( $posts ) ) {
-			return array(
-				'synced' => 0,
-				'errors' => 0,
-			);
-		}
-
-		// Get all terms at once (1 query) and build lookup arrays.
-		$all_terms = get_terms(
-			array(
-				'taxonomy'   => $this->taxonomy_slug,
-				'hide_empty' => false,
-			)
-		);
-
-		// Build lookup array: term name => term object.
-		$terms_by_name = array();
-		$meta_key      = CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug;
-
-		// Also build a map of existing term meta relationships to avoid unnecessary updates.
-		$term_meta_by_post_id = array();
-
-		if ( ! is_wp_error( $all_terms ) && ! empty( $all_terms ) ) {
-			foreach ( $all_terms as $term ) {
-				$terms_by_name[ $term->name ] = $term;
-
-				// Get existing meta relationship for this term.
-				$linked_post_id = get_term_meta( $term->term_id, $meta_key, true );
-				if ( $linked_post_id ) {
-					$term_meta_by_post_id[ (int) $linked_post_id ] = $term->term_id;
-				}
-			}
-		}
-
-		$synced = 0;
-		$errors = 0;
-
-		// Now loop through posts and use the lookup arrays (no queries in loop).
-		foreach ( $posts as $post ) {
-			// Check if a term with this name already exists (using lookup array).
-			$term = isset( $terms_by_name[ $post->post_title ] ) ? $terms_by_name[ $post->post_title ] : null;
-
-			if ( ! $term ) {
-				// Create a new term.
-				$result = wp_insert_term( $post->post_title, $this->taxonomy_slug );
-
-				if ( ! is_wp_error( $result ) ) {
-					// Store post ID as term meta for future reference.
-					update_term_meta( $result['term_id'], $meta_key, $post->ID );
-
-					// Update lookup arrays for consistency.
-					$new_term = get_term( $result['term_id'], $this->taxonomy_slug );
-					if ( $new_term && ! is_wp_error( $new_term ) ) {
-						$terms_by_name[ $new_term->name ]  = $new_term;
-						$term_meta_by_post_id[ $post->ID ] = $result['term_id'];
-					}
-
-					++$synced;
-				} else {
-					++$errors;
-				}
-			} else {
-				// Check if meta relationship already exists and is correct.
-				// $term_meta_by_post_id maps post ID => term ID, so this is the term ID
-				// currently linked to this post (or null if none).
-				$existing_linked_term_id = isset( $term_meta_by_post_id[ $post->ID ] ) ? $term_meta_by_post_id[ $post->ID ] : null;
-
-				// Only update if the relationship doesn't exist or is different.
-				if ( $existing_linked_term_id !== $term->term_id ) {
-					update_term_meta( $term->term_id, $meta_key, $post->ID );
-					$term_meta_by_post_id[ $post->ID ] = $term->term_id;
-				}
-
-				++$synced;
-			}
-		}
-
-		return array(
-			'synced' => $synced,
-			'errors' => $errors,
-		);
-	}
-
-	/**
-	 * Bulk sync all terms to posts
-	 *
-	 * @param int $offset Offset for pagination (default: 0).
-	 * @param int $limit  Limit for pagination (default: -1 for all).
-	 * @return array Results array with synced count and errors
-	 */
-	public function bulk_sync_terms_to_posts( $offset = 0, $limit = -1 ) {
-		// Get terms with pagination support.
-		$args = array(
-			'taxonomy'   => $this->taxonomy_slug,
-			'hide_empty' => false,
-			'offset'     => $offset,
-			'number'     => $limit > 0 ? $limit : 0, // 0 means get all.
-		);
-
-		$terms = get_terms( $args );
-
-		if ( is_wp_error( $terms ) || empty( $terms ) ) {
-			return array(
-				'synced' => 0,
-				'errors' => 0,
-			);
-		}
-
-		// Get all posts at once (1 query) and build lookup arrays.
-		$all_posts = get_posts(
-			array(
-				'post_type'      => $this->cpt_slug,
-				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-				'posts_per_page' => -1,
-			)
-		);
-
-		// Build lookup arrays.
-		$posts_by_title = array();
-		$posts_by_meta  = array();
-		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
-
-		// Build lookup: post title => post object (for title-based matching).
-		// Also build lookup: term_id => post object (for meta-based matching).
-		foreach ( $all_posts as $post ) {
-			$posts_by_title[ $post->post_title ] = $post;
-
-			// Get existing meta relationship.
-			$linked_term_id = get_post_meta( $post->ID, $meta_key, true );
-			if ( $linked_term_id ) {
-				$posts_by_meta[ (int) $linked_term_id ] = $post;
-			}
-		}
-
-		$synced = 0;
-		$errors = 0;
-
-		// Now loop through terms and use the lookup arrays (no queries in loop).
-		foreach ( $terms as $term ) {
-			// First, check if there's a post linked via meta relationship (most reliable).
-			$existing_post = isset( $posts_by_meta[ $term->term_id ] ) ? $posts_by_meta[ $term->term_id ] : null;
-
-			// Fallback: check by exact title match.
-			if ( ! $existing_post && isset( $posts_by_title[ $term->name ] ) ) {
-				$existing_post = $posts_by_title[ $term->name ];
-			}
-
-			if ( ! $existing_post ) {
-				// Create a new post.
-				$post_id = wp_insert_post(
+				'post_type'              => $this->pair->cpt_slug,
+				'post_status'            => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
+				'posts_per_page'         => 1,
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- the meta link is the relationship.
 					array(
-						'post_title'   => $term->name,
-						'post_content' => $term->description,
-						'post_status'  => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-						'post_type'    => $this->cpt_slug,
-					)
-				);
-
-				if ( ! is_wp_error( $post_id ) ) {
-					// Store term ID as post meta for future reference.
-					update_post_meta( $post_id, $meta_key, $term->term_id );
-
-					// Store post ID as term meta for future reference.
-					update_term_meta( $term->term_id, CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug, $post_id );
-
-					// Update lookup arrays for consistency.
-					$new_post = get_post( $post_id );
-					if ( $new_post ) {
-						$posts_by_title[ $new_post->post_title ] = $new_post;
-						$posts_by_meta[ $term->term_id ]         = $new_post;
-					}
-
-					++$synced;
-				} else {
-					++$errors;
-				}
-			} else {
-				// Post exists - ensure meta relationships are set correctly.
-				$needs_post_meta_update = false;
-				$needs_term_meta_update = false;
-
-				// Check if post meta needs updating.
-				$existing_term_id = get_post_meta( $existing_post->ID, $meta_key, true );
-				if ( (int) $existing_term_id !== $term->term_id ) {
-					$needs_post_meta_update = true;
-				}
-
-				// Check if term meta needs updating.
-				$term_meta_key    = CPT_TAX_SYNCER_META_PREFIX_POST . $this->cpt_slug;
-				$existing_post_id = get_term_meta( $term->term_id, $term_meta_key, true );
-				if ( (int) $existing_post_id !== $existing_post->ID ) {
-					$needs_term_meta_update = true;
-				}
-
-				// Only update if needed.
-				if ( $needs_post_meta_update ) {
-					update_post_meta( $existing_post->ID, $meta_key, $term->term_id );
-					$posts_by_meta[ $term->term_id ] = $existing_post;
-				}
-
-				if ( $needs_term_meta_update ) {
-					update_term_meta( $term->term_id, $term_meta_key, $existing_post->ID );
-				}
-
-				++$synced;
-			}
-		}
-
-		return array(
-			'synced' => $synced,
-			'errors' => $errors,
-		);
-	}
-
-	/**
-	 * Find a post linked to a term by meta relationship or title
-	 *
-	 * This method first checks for a post linked via meta relationship (most reliable),
-	 * then falls back to exact title match if no meta relationship exists.
-	 *
-	 * @param int    $term_id The term ID to find the linked post for.
-	 * @param string $title   The title to search for (fallback if no meta relationship).
-	 * @return WP_Post|null The linked post object, or null if not found.
-	 */
-	private function find_post_by_term( $term_id, $title ) {
-		// First, check if there's a post linked via meta relationship (most reliable).
-		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $this->taxonomy_slug;
-		$posts    = get_posts(
-			array(
-				'post_type'      => $this->cpt_slug,
-				'post_status'    => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
-				'posts_per_page' => 1,
-				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					array(
-						'key'   => $meta_key,
+						'key'   => $this->pair->post_meta_key(),
 						'value' => $term_id,
 					),
 				),
@@ -1033,58 +755,28 @@ class CPT_Taxonomy_Syncer {
 			return $posts[0];
 		}
 
-		// Fallback: check by exact title match using WP_Query.
-		$post = $this->find_post_by_title( $title );
-
-		if ( $post ) {
-			return $post;
-		}
-
-		return null;
+		return $this->find_post_by_title( $title );
 	}
 
 	/**
-	 * Find a post by exact title match
+	 * A published post in the paired type with exactly this title.
 	 *
-	 * Uses direct SQL query since WP_Query doesn't support title parameter
-	 * and get_page_by_title() is deprecated.
-	 *
-	 * @param string $title The post title to search for.
-	 * @return WP_Post|null The post object, or null if not found.
+	 * @param string $title The post title.
+	 * @return WP_Post|null
 	 */
-	private function find_post_by_title( $title ) {
-		global $wpdb;
-
-		// Use direct SQL query to find post by exact title.
-		$post_id = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->prepare(
-				"SELECT ID FROM {$wpdb->posts} 
-				WHERE post_title = %s 
-				AND post_type = %s 
-				AND post_status = %s 
-				LIMIT 1",
-				$title,
-				$this->cpt_slug,
-				CPT_TAX_SYNCER_DEFAULT_POST_STATUS
+	public function find_post_by_title( string $title ): ?WP_Post {
+		$posts = get_posts(
+			array(
+				'title'                  => $title,
+				'post_type'              => $this->pair->cpt_slug,
+				'post_status'            => CPT_TAX_SYNCER_DEFAULT_POST_STATUS,
+				'posts_per_page'         => 1,
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
 			)
 		);
 
-		if ( $post_id ) {
-			return get_post( $post_id );
-		}
-
-		return null;
-	}
-
-	/**
-	 * Get a syncer instance by CPT and taxonomy slugs
-	 *
-	 * @param string $cpt_slug The custom post type slug.
-	 * @param string $taxonomy_slug The taxonomy slug.
-	 * @return CPT_Taxonomy_Syncer|null The syncer instance or null if not found
-	 */
-	public static function get_syncer_instance( $cpt_slug, $taxonomy_slug ) {
-		$key = $cpt_slug . '_' . $taxonomy_slug;
-		return isset( self::$instances[ $key ] ) ? self::$instances[ $key ] : null;
+		return $posts[0] ?? null;
 	}
 }

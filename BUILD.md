@@ -29,8 +29,8 @@ npm run build
 ```
 
 This will:
-- Compile JSX files from `src/js/` to `build/js/`
-- Compile block files from `src/blocks/` to `build/js/`
+- Compile the settings-page script, the Query Loop variation and the Relationships dashboard from `src/js/` to `build/js/`
+- Compile each block in `src/blocks/<name>/` to `build/js/blocks/<name>/` (`index.js`, `style-index.css`, a copied `block.json` and `render.php`)
 - Minify and optimize the output
 - Generate source maps
 
@@ -71,20 +71,24 @@ The `.distignore` file controls which files are excluded from the zip. It exclud
 - `npm run lint:js` - Lint JavaScript files
 - `npm run lint:js:fix` - Fix JavaScript linting issues automatically
 - `npm run lint:css` - Lint CSS files
+- `npm run lint:dup` - Check for duplicated code with jscpd
+- `npm run env:start` / `npm run env:stop` - Start or stop the wp-env site
+- `npm run test:php` - Run the PHPUnit suite inside the wp-env tests container
 - `npm run format` - Format code using Prettier
 - `npm run packages-update` - Update WordPress packages to latest versions
 
 ## File Structure
 
-- `src/js/` - Source files (JSX and JS)
-- `build/js/` - Built files (compiled JavaScript and asset manifests)
+- `src/js/` - Settings page, Query Loop variation and dashboard sources (JS, JSX, SCSS)
+- `src/blocks/` - One directory per block, plus `shared/` for the editor component both blocks use
+- `build/js/` - Built files (compiled JavaScript, CSS and asset manifests)
 - `webpack.config.js` - Webpack configuration
 - `package.json` - Dependencies and scripts
 
 ## Notes
 
-- The built file `build/js/post-type-relationships-dashboard.js` must exist for the relationships dashboard to work
-- If the built file is missing, an admin notice will be shown
+- Every admin script and both blocks are served from `build/`; the settings page, the term-edit styles and the blocks do nothing until it exists
+- If the dashboard's built file is missing, an admin notice will be shown
 - Source files use JSX syntax and must be compiled before use
 - The build process uses WordPress's default webpack configuration with custom entry points
 

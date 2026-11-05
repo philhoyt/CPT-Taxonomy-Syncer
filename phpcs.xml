@@ -21,8 +21,12 @@
     <arg name="parallel" value="8"/>
 
     <!-- Rules: WordPress Coding Standards -->
-    <config name="minimum_supported_wp_version" value="6.0"/>
-    
+    <config name="minimum_wp_version" value="6.0"/>
+
+    <!-- PHP floor from the plugin header ("Requires PHP"). -->
+    <config name="testVersion" value="7.4-"/>
+    <rule ref="PHPCompatibilityWP"/>
+
     <!-- Include WordPress standards -->
     <rule ref="WordPress">
         <!-- Exclude rules we don't want -->
@@ -36,6 +40,20 @@
     <!-- Allow short array syntax -->
     <rule ref="Generic.Arrays.DisallowShortArraySyntax.Found">
         <severity>0</severity>
+    </rule>
+
+    <!-- Readability metrics (not part of WPCS). Warning: refactor when you next touch the function. Error: refactor before commit. -->
+    <rule ref="Generic.Metrics.CyclomaticComplexity">
+        <properties>
+            <property name="complexity" value="10"/>
+            <property name="absoluteComplexity" value="20"/>
+        </properties>
+    </rule>
+    <rule ref="Generic.Metrics.NestingLevel">
+        <properties>
+            <property name="nestingLevel" value="4"/>
+            <property name="absoluteNestingLevel" value="6"/>
+        </properties>
     </rule>
 
     <!-- Set text domain -->
@@ -58,7 +76,20 @@
     <!-- Let's also check that everything is properly documented. -->
     <rule ref="WordPress-Docs"/>
 
+    <!-- Test methods are documented by their names. -->
+    <rule ref="Squiz.Commenting.FunctionComment.Missing">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+
     <!-- Add in some extra rules from other standards. -->
     <rule ref="Generic.CodeAnalysis.UnusedFunctionParameter"/>
     <rule ref="Generic.Commenting.Todo"/>
+
+    <!-- Tests: fixtures and assertions may repeat and use the test-suite's own naming. -->
+    <rule ref="WordPress.Files.FileName">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.ValidFunctionName">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
 </ruleset>
