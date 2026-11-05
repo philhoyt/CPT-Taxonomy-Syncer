@@ -8,6 +8,10 @@
 /.github
 /.wp-env.json
 /.wp-env.override.json
+/playwright.config.js
+/test-results
+/playwright-report
+/artifacts
 /phpcs.xml
 /phpmd.xml
 /phpunit.xml.dist

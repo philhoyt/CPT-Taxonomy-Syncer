@@ -48,3 +48,8 @@ coverage.xml
 
 # wp-env local override
 .wp-env.override.json
+
+# Playwright output (wp-scripts writes storage state and traces under artifacts/)
+test-results/
+playwright-report/
+artifacts/

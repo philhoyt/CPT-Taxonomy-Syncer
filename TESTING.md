@@ -12,6 +12,16 @@ npm run test:php
 
 It covers the sync hooks (create, rename, delete, trash, status rules, the recursion guards), the bulk sync with offsets and limits, every REST route's permissions and validation, the batch flow, the settings sanitizer, column sorting, the Query Loop integration and the adjacent-post lookup. `npm run test:php -- --filter Test_Sync_Hooks` runs one class.
 
+The Playwright suite in `tests/e2e/` drives the block editor on the same wp-env tests site. It pairs posts with tags, inserts the Previous and Next Post (Relationship) blocks, sets them up in the inspector, publishes, and checks the links on the front end with the custom order on and off:
+
+```bash
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Run it before `npm run test:php`: the PHPUnit bootstrap reinstalls WordPress in the tests site and leaves it with no active theme, so the front-end checks fail until `npx wp-env clean tests` resets it. If `.wp-env.override.json` moves the tests site to another port, pass it as `WP_BASE_URL=http://localhost:8911 npm run test:e2e`.
+
 The rest of this guide covers the WP-CLI commands for checking larger datasets by hand.
 
 ## Prerequisites

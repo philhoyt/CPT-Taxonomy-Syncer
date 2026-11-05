@@ -109,5 +109,13 @@ jobs:
           done
           exit 1
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Before PHPUnit: its bootstrap reinstalls WordPress in the tests site
+      # and leaves it with no active theme, which breaks the front-end checks.
+      - name: Run Playwright
+        run: npm run test:e2e
+
       - name: Run PHPUnit
         run: npm run test:php
