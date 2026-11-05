@@ -4,6 +4,21 @@
 	"description": "Automatically syncs a custom post type with a taxonomy",
 	"author": "Phil Hoyt",
 	"license": "GPL-2.0-or-later",
+	"keywords": [
+		"wordpress",
+		"plugin",
+		"custom-post-type",
+		"taxonomy",
+		"sync"
+	],
+	"homepage": "https://github.com/philhoyt/CPT-Taxonomy-Syncer#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/philhoyt/CPT-Taxonomy-Syncer.git"
+	},
+	"bugs": {
+		"url": "https://github.com/philhoyt/CPT-Taxonomy-Syncer/issues"
+	},
 	"files": [
 		"cpt-taxonomy-syncer.php",
 		"uninstall.php",
@@ -14,6 +29,17 @@
 		"build",
 		"lib"
 	],
+	"dependencies": {
+		"@wordpress/api-fetch": "^7.0.0",
+		"@wordpress/element": "^6.0.0",
+		"@wordpress/i18n": "^5.0.0"
+	},
+	"devDependencies": {
+		"@wordpress/block-editor": "^15.19.0",
+		"@wordpress/blocks": "^15.19.0",
+		"@wordpress/components": "^33.1.0",
+		"@wordpress/scripts": "^37.1.0"
+	},
 	"scripts": {
 		"build": "wp-scripts build",
 		"start": "wp-scripts start",
@@ -27,16 +53,5 @@
 		"format": "wp-scripts format",
 		"format:js": "wp-scripts format-js",
 		"format:css": "wp-scripts format-style"
-	},
-	"devDependencies": {
-		"@wordpress/block-editor": "^15.19.0",
-		"@wordpress/blocks": "^15.19.0",
-		"@wordpress/components": "^33.1.0",
-		"@wordpress/scripts": "^32.0.0"
-	},
-	"dependencies": {
-		"@wordpress/api-fetch": "^7.0.0",
-		"@wordpress/element": "^6.0.0",
-		"@wordpress/i18n": "^5.0.0"
 	}
 }
