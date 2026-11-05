@@ -93,6 +93,28 @@ npm run build
 
 - Change: Tested up to WordPress 7.1.
 
+### 1.4.3
+
+- Fix: The `/post-type-relationships` REST route now checks the requested post type's own edit capability (the same gate as the Relationships page) instead of the literal `edit_posts`, so roles that can edit a custom post type but not blog posts can load the page.
+
+### 1.4.2
+
+- Fix: Include lib/ directory in plugin zip so Plugin Update Checker ships correctly.
+
+### 1.4.1
+
+- Security: Tighten REST permission callback to per-post capability check.
+
+### 1.4.0
+
+- Added Plugin Update Checker to deliver automatic updates via GitHub releases
+- Added CI workflow for automated linting and build checks on pull requests
+- Replaced `wp_localize_script` with `wp_add_inline_script` in admin script registration
+- Fixed escaping warnings in JSX and PHP audit pass
+- Removed dead `view.js` stubs from block registration
+- Removed unused parameters from `invalidate_cache()` and corrected a misleading false-positive comment
+- Full PHPCS linting pass with zero errors
+
 ### 1.3.0
 
 - Fixed critical `uninstall.php` fatal error caused by an undefined constant
