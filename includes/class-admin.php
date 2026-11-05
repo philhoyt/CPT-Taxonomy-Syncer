@@ -2,7 +2,7 @@
 /**
  * Admin class for CPT-Taxonomy Syncer
  *
- * Handles admin UI and settings
+ * The settings page under Tools and the plugin action link.
  *
  * @package CPT_Taxonomy_Syncer
  */
@@ -15,38 +15,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Class CPT_Tax_Syncer_Admin
  *
- * Handles the admin interface, settings page, and admin functionality for the CPT-Taxonomy Syncer plugin.
+ * Settings page: the pairs table, its sanitizer and the manual sync buttons.
  *
  * @package CPT_Taxonomy_Syncer
  */
 class CPT_Tax_Syncer_Admin {
 	/**
+	 * Capability for the settings page.
+	 */
+	const CAPABILITY = 'manage_options';
+
+	/**
+	 * Settings page slug.
+	 */
+	const PAGE_SLUG = 'cpt-taxonomy-syncer';
+
+	/**
+	 * Settings group.
+	 */
+	const SETTINGS_GROUP = 'cpt_tax_syncer_settings';
+
+	/**
+	 * Admin script and style handle.
+	 */
+	const SCRIPT_HANDLE = 'cpt-tax-syncer-admin';
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
-		// Add admin menu.
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
-
-		// Register settings.
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
-
-		// Add admin scripts.
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
-
-		// Add settings link on plugins page.
 		add_filter( 'plugin_action_links_' . plugin_basename( dirname( __DIR__ ) . '/cpt-taxonomy-syncer.php' ), array( $this, 'add_settings_link' ) );
-
-		// Add admin columns for synced post types.
-		add_action( 'init', array( $this, 'add_admin_columns' ), 20 );
-
-		// Handle column sorting.
-		add_action( 'pre_get_posts', array( $this, 'handle_column_sorting' ) );
-
-		// Add synced post info to term edit pages.
-		add_action( 'init', array( $this, 'add_term_edit_info' ), 20 );
-
-		// Add relationship dashboard pages under post type menus.
-		add_action( 'admin_menu', array( $this, 'add_relationship_dashboard_pages' ), 20 );
 	}
 
 	/**
@@ -54,10 +55,10 @@ class CPT_Tax_Syncer_Admin {
 	 */
 	public function add_admin_menu() {
 		add_management_page(
-			'CPT-Taxonomy Syncer',
-			'CPT-Tax Syncer',
-			'manage_options',
-			'cpt-taxonomy-syncer',
+			__( 'CPT-Taxonomy Syncer', 'cpt-taxonomy-syncer' ),
+			__( 'CPT-Tax Syncer', 'cpt-taxonomy-syncer' ),
+			self::CAPABILITY,
+			self::PAGE_SLUG,
 			array( $this, 'render_settings_page' )
 		);
 	}
@@ -67,7 +68,7 @@ class CPT_Tax_Syncer_Admin {
 	 */
 	public function register_settings() {
 		register_setting(
-			'cpt_tax_syncer_settings',
+			self::SETTINGS_GROUP,
 			CPT_TAX_SYNCER_OPTION_NAME,
 			array(
 				'type'              => 'array',
@@ -78,9 +79,14 @@ class CPT_Tax_Syncer_Admin {
 	}
 
 	/**
-	 * Sanitize pairs
+	 * Sanitizes the submitted pairs.
 	 *
-	 * @param array $pairs The pairs to sanitize.
+	 * Slugs are reduced to keys (they end up in hook names, meta keys and
+	 * transient names), each must name a registered post type or taxonomy,
+	 * the two must differ, and duplicate rows collapse. Rejected rows are
+	 * reported through the settings errors.
+	 *
+	 * @param mixed $pairs The submitted pairs.
 	 * @return array The sanitized pairs
 	 */
 	public function sanitize_pairs( $pairs ) {
@@ -88,117 +94,114 @@ class CPT_Tax_Syncer_Admin {
 			return array();
 		}
 
-		$sanitized_pairs = array();
+		$sanitized = array();
+		$seen      = array();
 
-		foreach ( $pairs as $pair ) {
-			if ( isset( $pair['cpt_slug'] ) && isset( $pair['taxonomy_slug'] ) ) {
-				$sanitized_pairs[] = array(
-					'cpt_slug'        => sanitize_text_field( $pair['cpt_slug'] ),
-					'taxonomy_slug'   => sanitize_text_field( $pair['taxonomy_slug'] ),
-					'enable_redirect' => isset( $pair['enable_redirect'] ) ? (bool) $pair['enable_redirect'] : false,
-				);
+		foreach ( $pairs as $row ) {
+			$cpt_slug      = sanitize_key( (string) ( $row['cpt_slug'] ?? '' ) );
+			$taxonomy_slug = sanitize_key( (string) ( $row['taxonomy_slug'] ?? '' ) );
+			$problem       = $this->pair_problem( $cpt_slug, $taxonomy_slug );
+
+			if ( $problem ) {
+				$this->add_pair_error( $problem );
+				continue;
 			}
+
+			if ( isset( $seen[ $cpt_slug . '|' . $taxonomy_slug ] ) ) {
+				continue;
+			}
+			$seen[ $cpt_slug . '|' . $taxonomy_slug ] = true;
+
+			$sanitized[] = array(
+				'cpt_slug'        => $cpt_slug,
+				'taxonomy_slug'   => $taxonomy_slug,
+				'enable_redirect' => ! empty( $row['enable_redirect'] ),
+			);
 		}
 
-		return $sanitized_pairs;
+		return $sanitized;
 	}
 
 	/**
-	 * Enqueue admin scripts
+	 * Why a pair cannot be saved, or an empty string when it can.
+	 *
+	 * @param string $cpt_slug      Post type slug.
+	 * @param string $taxonomy_slug Taxonomy slug.
+	 * @return string
+	 */
+	private function pair_problem( string $cpt_slug, string $taxonomy_slug ): string {
+		if ( '' === $cpt_slug || '' === $taxonomy_slug ) {
+			return __( 'A pair needs both a post type and a taxonomy.', 'cpt-taxonomy-syncer' );
+		}
+
+		if ( ! post_type_exists( $cpt_slug ) ) {
+			/* translators: %s: post type slug */
+			return sprintf( __( 'The post type "%s" is not registered.', 'cpt-taxonomy-syncer' ), $cpt_slug );
+		}
+
+		if ( ! taxonomy_exists( $taxonomy_slug ) ) {
+			/* translators: %s: taxonomy slug */
+			return sprintf( __( 'The taxonomy "%s" is not registered.', 'cpt-taxonomy-syncer' ), $taxonomy_slug );
+		}
+
+		if ( $cpt_slug === $taxonomy_slug ) {
+			/* translators: %s: slug */
+			return sprintf( __( 'The post type and taxonomy of a pair must have different slugs ("%s").', 'cpt-taxonomy-syncer' ), $cpt_slug );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Records a rejected row so the settings page can say why.
+	 *
+	 * @param string $message The reason.
+	 */
+	private function add_pair_error( string $message ): void {
+		if ( function_exists( 'add_settings_error' ) ) {
+			add_settings_error( CPT_TAX_SYNCER_OPTION_NAME, 'cpt_tax_syncer_invalid_pair', $message );
+		}
+	}
+
+	/**
+	 * Enqueues the settings-page script and the admin stylesheet.
 	 *
 	 * @param string $hook The current admin page.
 	 */
 	public function enqueue_admin_scripts( $hook ) {
-		if ( 'tools_page_cpt-taxonomy-syncer' === $hook ) {
-			wp_enqueue_script(
-				'cpt-tax-syncer-admin',
-				CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'assets/js/admin.js',
-				array( 'jquery' ),
-				CPT_TAXONOMY_SYNCER_VERSION,
-				true
-			);
+		$is_settings_page = 'tools_page_' . self::PAGE_SLUG === $hook;
 
-			wp_add_inline_script(
-				'cpt-tax-syncer-admin',
-				'var cptTaxSyncerAdmin = ' . wp_json_encode(
-					array(
-						'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
-						'nonce'    => wp_create_nonce( 'wp_rest' ),
-						'pairs'    => get_option( CPT_TAX_SYNCER_OPTION_NAME, array() ),
-					)
-				) . ';',
-				'before'
-			);
+		if ( ! $is_settings_page && 'term.php' !== $hook ) {
+			return;
 		}
 
-		// Check if this is a post type relationships page.
-		$is_relationships_page = strpos( $hook, 'cpt-tax-syncer-relationships-' ) !== false;
-
-		if ( $is_relationships_page ) {
-			// Check if built file exists (from npm build), otherwise use source.
-			$script_path = 'build/js/post-type-relationships-dashboard.js';
-			$script_url  = CPT_TAXONOMY_SYNCER_PLUGIN_URL . $script_path;
-			$script_file = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . $script_path;
-			$asset_file  = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/post-type-relationships-dashboard.asset.php';
-
-			// If built file doesn't exist, show admin notice.
-			if ( ! file_exists( $script_file ) ) {
-				add_action(
-					'admin_notices',
-					function () {
-						?>
-						<div class="notice notice-error">
-							<p>
-								<strong><?php esc_html_e( 'CPT Taxonomy Syncer:', 'cpt-taxonomy-syncer' ); ?></strong>
-								<?php
-								printf(
-									/* translators: %s: npm build command */
-									esc_html__( 'The relationships dashboard requires a build step. Please run %s in the plugin directory.', 'cpt-taxonomy-syncer' ),
-									'<code>npm install && npm run build</code>'
-								);
-								?>
-							</p>
-						</div>
-						<?php
-					}
-				);
-				return;
-			}
-
-			// Load asset file to get dependencies and version.
-			$asset = array(
-				'dependencies' => array( 'wp-element', 'wp-api-fetch', 'wp-i18n' ),
-				'version'      => filemtime( $script_file ),
-			);
-			if ( file_exists( $asset_file ) ) {
-				$asset = require $asset_file;
-			}
-
-			// Enqueue our post type relationships dashboard script.
-			wp_enqueue_script(
-				'cpt-tax-syncer-post-type-relationships',
-				$script_url,
-				$asset['dependencies'],
-				$asset['version'],
-				true
-			);
-
-			wp_add_inline_script(
-				'cpt-tax-syncer-post-type-relationships',
-				'var cptTaxSyncerPostTypeRelationships = ' . wp_json_encode(
-					array(
-						'restBase' => rest_url( 'cpt-tax-syncer/v1' ),
-						'nonce'    => wp_create_nonce( 'wp_rest' ),
-					)
-				) . ';',
-				'before'
-			);
-
-			// Set script translations.
-			if ( function_exists( 'wp_set_script_translations' ) ) {
-				wp_set_script_translations( 'cpt-tax-syncer-post-type-relationships', 'cpt-taxonomy-syncer' );
-			}
+		$asset_file = CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'build/js/admin.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
 		}
+		$asset = require $asset_file;
+
+		wp_enqueue_style( self::SCRIPT_HANDLE, CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'build/js/admin.css', array(), $asset['version'] );
+
+		if ( ! $is_settings_page ) {
+			return;
+		}
+
+		wp_enqueue_script( self::SCRIPT_HANDLE, CPT_TAXONOMY_SYNCER_PLUGIN_URL . 'build/js/admin.js', $asset['dependencies'], $asset['version'], true );
+		wp_set_script_translations( self::SCRIPT_HANDLE, 'cpt-taxonomy-syncer' );
+		wp_add_inline_script(
+			self::SCRIPT_HANDLE,
+			'var cptTaxSyncerAdmin = ' . wp_json_encode(
+				array(
+					'restNamespace' => CPT_Tax_Syncer_REST_Controller::REST_NAMESPACE,
+					'operations'    => array(
+						'postsToTerms' => CPT_Taxonomy_Syncer::OPERATION_POSTS_TO_TERMS,
+						'termsToPosts' => CPT_Taxonomy_Syncer::OPERATION_TERMS_TO_POSTS,
+					),
+				)
+			) . ';',
+			'before'
+		);
 	}
 
 	/**
@@ -208,569 +211,177 @@ class CPT_Tax_Syncer_Admin {
 	 * @return array Modified plugin action links
 	 */
 	public function add_settings_link( $links ) {
-		$settings_link = '<a href="' . esc_url( admin_url( 'tools.php?page=cpt-taxonomy-syncer' ) ) . '">' . esc_html__( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
+		$settings_link = '<a href="' . esc_url( admin_url( 'tools.php?page=' . self::PAGE_SLUG ) ) . '">' . esc_html__( 'Settings', 'cpt-taxonomy-syncer' ) . '</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
 	}
-
 
 	/**
 	 * Render settings page
 	 */
 	public function render_settings_page() {
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_die( esc_html__( 'You do not have permission to access this page.', 'cpt-taxonomy-syncer' ), 403 );
+		}
 
-		// Get all registered post types.
+		$pairs      = CPT_Tax_Syncer_Pair::all();
 		$post_types = get_post_types( array( 'public' => true ), 'objects' );
-
-		// Get all registered taxonomies.
 		$taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'CPT-Taxonomy Syncer Settings', 'cpt-taxonomy-syncer' ); ?></h1>
 
+			<?php settings_errors( CPT_TAX_SYNCER_OPTION_NAME ); ?>
+
 			<form method="post" action="options.php">
-				<?php settings_fields( 'cpt_tax_syncer_settings' ); ?>
-				<?php do_settings_sections( 'cpt_tax_syncer_settings' ); ?>
+				<?php settings_fields( self::SETTINGS_GROUP ); ?>
+				<?php do_settings_sections( self::SETTINGS_GROUP ); ?>
 
 				<h2><?php esc_html_e( 'CPT-Taxonomy Pairs', 'cpt-taxonomy-syncer' ); ?></h2>
 
 				<p><?php esc_html_e( 'Configure the custom post types and taxonomies that should be synced.', 'cpt-taxonomy-syncer' ); ?></p>
 
-				<table class="widefat" id="cpt-tax-pairs">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Actions', 'cpt-taxonomy-syncer' ); ?></th>
-						</tr>
-					</thead>
+				<table class="widefat cpt-tax-syncer-pairs" id="cpt-tax-syncer-pairs">
+					<?php $this->render_pairs_table_head(); ?>
 					<tbody>
 						<?php if ( empty( $pairs ) ) : ?>
-							<tr class="no-pairs">
-								<td colspan="3"><?php esc_html_e( 'No pairs configured yet.', 'cpt-taxonomy-syncer' ); ?></td>
-							</tr>
+							<?php $this->render_no_pairs_row(); ?>
 						<?php else : ?>
 							<?php foreach ( $pairs as $index => $pair ) : ?>
-								<tr>
-									<td>
-										<select name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][cpt_slug]" required>
-											<option value="">Select a post type</option>
-											<?php foreach ( $post_types as $post_type ) : ?>
-												<option value="<?php echo esc_attr( $post_type->name ); ?>" <?php selected( $pair['cpt_slug'], $post_type->name ); ?>>
-													<?php echo esc_html( $post_type->label ); ?> (<?php echo esc_html( $post_type->name ); ?>)
-												</option>
-											<?php endforeach; ?>
-										</select>
-									</td>
-									<td>
-										<select name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][taxonomy_slug]" required>
-											<option value="">Select a taxonomy</option>
-											<?php foreach ( $taxonomies as $taxonomy ) : ?>
-												<option value="<?php echo esc_attr( $taxonomy->name ); ?>" <?php selected( $pair['taxonomy_slug'], $taxonomy->name ); ?>>
-													<?php echo esc_html( $taxonomy->label ); ?> (<?php echo esc_html( $taxonomy->name ); ?>)
-												</option>
-											<?php endforeach; ?>
-										</select>
-									</td>
-									<td>
-										<input type="checkbox" name="cpt_tax_syncer_pairs[<?php echo esc_attr( $index ); ?>][enable_redirect]" value="1" <?php checked( isset( $pair['enable_redirect'] ) ? $pair['enable_redirect'] : false ); ?>>
-									</td>
-									<td>
-										<button type="button" class="button remove-pair">Remove</button>
-									</td>
-								</tr>
+								<?php $this->render_pair_row( (string) $index, $pair, $post_types, $taxonomies ); ?>
 							<?php endforeach; ?>
 						<?php endif; ?>
 					</tbody>
 					<tfoot>
 						<tr>
 							<td colspan="4">
-								<button type="button" class="button add-pair">Add Pair</button>
+								<button type="button" class="button cpt-tax-syncer-add-pair"><?php esc_html_e( 'Add Pair', 'cpt-taxonomy-syncer' ); ?></button>
 							</td>
 						</tr>
 					</tfoot>
 				</table>
-				
+
 				<?php submit_button(); ?>
 			</form>
-			
-			<?php if ( ! empty( $pairs ) ) : ?>
-				<h2><?php esc_html_e( 'Manual Sync', 'cpt-taxonomy-syncer' ); ?></h2>
-				<p><?php esc_html_e( 'Use these buttons to manually sync your post types and taxonomies.', 'cpt-taxonomy-syncer' ); ?></p>
 
-				<table class="widefat" style="margin-top: 20px;">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></th>
-							<th><?php esc_html_e( 'Actions', 'cpt-taxonomy-syncer' ); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ( $pairs as $pair ) : ?>
-							<tr>
-								<td><?php echo esc_html( $pair['cpt_slug'] ); ?></td>
-								<td><?php echo esc_html( $pair['taxonomy_slug'] ); ?></td>
-								<td><?php echo isset( $pair['enable_redirect'] ) && $pair['enable_redirect'] ? esc_html__( 'Yes', 'cpt-taxonomy-syncer' ) : esc_html__( 'No', 'cpt-taxonomy-syncer' ); ?></td>
-								<td>
-									<button type="button" class="button sync-posts-to-terms" data-cpt="<?php echo esc_attr( $pair['cpt_slug'] ); ?>" data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>">
-										<?php esc_html_e( 'Sync Posts to Terms', 'cpt-taxonomy-syncer' ); ?>
-									</button>
-									<button type="button" class="button sync-terms-to-posts" data-cpt="<?php echo esc_attr( $pair['cpt_slug'] ); ?>" data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>">
-										<?php esc_html_e( 'Sync Terms to Posts', 'cpt-taxonomy-syncer' ); ?>
-									</button>
-								</td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-				
-				<div id="sync-result" class="notice" style="display: none; margin-top: 20px;">
-					<p></p>
-				</div>
-			<?php endif; ?>
-			
-			<script type="text/template" id="pair-template">
-				<tr>
-					<td>
-						<select name="cpt_tax_syncer_pairs[{{index}}][cpt_slug]" required>
-							<option value="">Select a post type</option>
-							<?php foreach ( $post_types as $post_type ) : ?>
-								<option value="<?php echo esc_attr( $post_type->name ); ?>">
-									<?php echo esc_html( $post_type->label ); ?> (<?php echo esc_html( $post_type->name ); ?>)
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</td>
-					<td>
-						<select name="cpt_tax_syncer_pairs[{{index}}][taxonomy_slug]" required>
-							<option value="">Select a taxonomy</option>
-							<?php foreach ( $taxonomies as $taxonomy ) : ?>
-								<option value="<?php echo esc_attr( $taxonomy->name ); ?>">
-									<?php echo esc_html( $taxonomy->label ); ?> (<?php echo esc_html( $taxonomy->name ); ?>)
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</td>
-					<td>
-						<input type="checkbox" name="cpt_tax_syncer_pairs[{{index}}][enable_redirect]" value="1">
-					</td>
-					<td>
-						<button type="button" class="button remove-pair">Remove</button>
-					</td>
-				</tr>
+			<?php $this->render_manual_sync_table( $pairs ); ?>
+
+			<script type="text/template" id="cpt-tax-syncer-pair-template">
+				<?php $this->render_pair_row( '{{index}}', null, $post_types, $taxonomies ); ?>
 			</script>
 		</div>
 		<?php
 	}
 
 	/**
-	 * Add admin columns for synced post types
+	 * The pairs table head.
 	 */
-	public function add_admin_columns() {
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-
-		// Track which post types we've already added columns for.
-		$processed_post_types = array();
-
-		foreach ( $pairs as $pair ) {
-			$cpt_slug      = $pair['cpt_slug'];
-			$taxonomy_slug = $pair['taxonomy_slug'];
-
-			// Only add column once per post type (use first pair if multiple exist).
-			if ( in_array( $cpt_slug, $processed_post_types, true ) ) {
-				continue;
-			}
-
-			$processed_post_types[] = $cpt_slug;
-
-			// Add column header.
-			add_filter( 'manage_' . $cpt_slug . '_posts_columns', array( $this, 'add_synced_term_column' ) );
-
-			// Populate column content.
-			add_action( 'manage_' . $cpt_slug . '_posts_custom_column', array( $this, 'render_synced_term_column' ), 10, 2 );
-
-			// Make column sortable.
-			add_filter( 'manage_edit-' . $cpt_slug . '_sortable_columns', array( $this, 'make_synced_term_column_sortable' ) );
-		}
-	}
-
-	/**
-	 * Add synced term column to post list
-	 *
-	 * @param array $columns Existing columns.
-	 * @return array Modified columns
-	 */
-	public function add_synced_term_column( $columns ) {
-		// Insert the column after the title column.
-		$new_columns = array();
-		foreach ( $columns as $key => $value ) {
-			$new_columns[ $key ] = $value;
-			if ( 'title' === $key ) {
-				$new_columns['synced_term'] = __( 'Synced Term', 'cpt-taxonomy-syncer' );
-			}
-		}
-
-		// If title column doesn't exist, append to end.
-		if ( ! isset( $new_columns['synced_term'] ) ) {
-			$new_columns['synced_term'] = __( 'Synced Term', 'cpt-taxonomy-syncer' );
-		}
-
-		return $new_columns;
-	}
-
-	/**
-	 * Render synced term column content
-	 *
-	 * @param string $column_name The column name.
-	 * @param int    $post_id The post ID.
-	 */
-	public function render_synced_term_column( $column_name, $post_id ) {
-		if ( 'synced_term' !== $column_name ) {
-			return;
-		}
-
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-		$post  = get_post( $post_id );
-
-		if ( ! $post ) {
-			return;
-		}
-
-		// Find the pair for this post type.
-		$current_pair = null;
-		foreach ( $pairs as $pair ) {
-			if ( $pair['cpt_slug'] === $post->post_type ) {
-				$current_pair = $pair;
-				break;
-			}
-		}
-
-		if ( ! $current_pair ) {
-			echo esc_html( '—' );
-			return;
-		}
-
-		// Get the linked term ID from post meta.
-		$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $current_pair['taxonomy_slug'];
-		$term_id  = get_post_meta( $post_id, $meta_key, true );
-		$taxonomy = get_taxonomy( $current_pair['taxonomy_slug'] );
-
-		if ( $term_id ) {
-			$term = get_term( $term_id, $current_pair['taxonomy_slug'] );
-
-			if ( $term && ! is_wp_error( $term ) ) {
-				// Build edit link for the term.
-				$edit_link = admin_url( 'term.php?taxonomy=' . $current_pair['taxonomy_slug'] . '&tag_ID=' . $term_id . '&post_type=' . $post->post_type );
-				printf(
-					'<a href="%s">%s</a>',
-					esc_url( $edit_link ),
-					esc_html( $term->name )
-				);
-			} else {
-				echo esc_html( '—' );
-			}
-		} else {
-			echo '<span style="color: #999;">' . esc_html__( 'Not linked', 'cpt-taxonomy-syncer' ) . '</span>';
-		}
-	}
-
-	/**
-	 * Make synced term column sortable
-	 *
-	 * @param array $columns Sortable columns.
-	 * @return array Modified sortable columns
-	 */
-	public function make_synced_term_column_sortable( $columns ) {
-		$columns['synced_term'] = 'synced_term';
-		return $columns;
-	}
-
-	/**
-	 * Handle sorting by synced term column
-	 *
-	 * @param WP_Query $query The WP_Query object.
-	 */
-	public function handle_column_sorting( $query ) {
-		if ( ! is_admin() || ! $query->is_main_query() ) {
-			return;
-		}
-
-		$orderby = $query->get( 'orderby' );
-
-		if ( 'synced_term' === $orderby ) {
-			$pairs     = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-			$post_type = $query->get( 'post_type' );
-
-			// Find the pair for this post type.
-			$current_pair = null;
-			foreach ( $pairs as $pair ) {
-				if ( $pair['cpt_slug'] === $post_type ) {
-					$current_pair = $pair;
-					break;
-				}
-			}
-
-			if ( $current_pair ) {
-				$meta_key = CPT_TAX_SYNCER_META_PREFIX_TERM . $current_pair['taxonomy_slug'];
-				$query->set( 'meta_key', $meta_key );
-				$query->set( 'orderby', 'meta_value' );
-			}
-		}
-	}
-
-	/**
-	 * Add synced post info to term edit pages
-	 */
-	public function add_term_edit_info() {
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-
-		foreach ( $pairs as $pair ) {
-			$taxonomy_slug = $pair['taxonomy_slug'];
-
-			// Add fields to term edit form.
-			add_action( $taxonomy_slug . '_edit_form_fields', array( $this, 'render_term_sync_info' ), 10, 2 );
-		}
-	}
-
-	/**
-	 * Render synced post info on term edit page
-	 *
-	 * @param WP_Term $term The term object.
-	 * @param string  $taxonomy The taxonomy slug.
-	 */
-	public function render_term_sync_info( $term, $taxonomy ) {
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-
-		// Find the pair for this taxonomy.
-		$current_pair = null;
-		foreach ( $pairs as $pair ) {
-			if ( $pair['taxonomy_slug'] === $taxonomy ) {
-				$current_pair = $pair;
-				break;
-			}
-		}
-
-		if ( ! $current_pair ) {
-			return;
-		}
-
-		$cpt_slug = $current_pair['cpt_slug'];
-
-		// Get the linked post ID from term meta.
-		$meta_key       = CPT_TAX_SYNCER_META_PREFIX_POST . $cpt_slug;
-		$linked_post_id = get_term_meta( $term->term_id, $meta_key, true );
-
+	private function render_pairs_table_head(): void {
 		?>
-		<tr class="form-field term-sync-info-wrap">
-			<th scope="row">
-				<label><?php esc_html_e( 'Synced Post', 'cpt-taxonomy-syncer' ); ?></label>
-			</th>
-			<td>
-				<?php if ( $linked_post_id ) : ?>
-					<?php
-					$linked_post = get_post( $linked_post_id );
-					if ( $linked_post && $linked_post->post_type === $cpt_slug ) :
-						$edit_link = get_edit_post_link( $linked_post_id );
-						$view_link = get_permalink( $linked_post_id );
-						?>
-						<p>
-							<strong><?php esc_html_e( 'Linked Post:', 'cpt-taxonomy-syncer' ); ?></strong>
-							<a href="<?php echo esc_url( $edit_link ); ?>"><?php echo esc_html( $linked_post->post_title ); ?></a>
-							<span class="description">(ID: <?php echo esc_html( $linked_post_id ); ?>)</span>
-							| <a href="<?php echo esc_url( $view_link ); ?>" target="_blank"><?php esc_html_e( 'View', 'cpt-taxonomy-syncer' ); ?></a>
-						</p>
-					<?php else : ?>
-						<p>
-							<span class="description" style="color: #d63638;">
-								<?php esc_html_e( 'Linked post not found (may have been deleted).', 'cpt-taxonomy-syncer' ); ?>
-								<?php esc_html_e( 'Post ID:', 'cpt-taxonomy-syncer' ); ?> <?php echo esc_html( $linked_post_id ); ?>
-							</span>
-						</p>
-					<?php endif; ?>
-				<?php else : ?>
-					<p>
-						<span class="description" style="color: #999;">
-							<?php esc_html_e( 'Not linked to any post.', 'cpt-taxonomy-syncer' ); ?>
-						</span>
-					</p>
-				<?php endif; ?>
+		<thead>
+			<tr>
+				<th scope="col"><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></th>
+				<th scope="col"><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></th>
+				<th scope="col"><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></th>
+				<th scope="col"><?php esc_html_e( 'Actions', 'cpt-taxonomy-syncer' ); ?></th>
+			</tr>
+		</thead>
+		<?php
+	}
 
-				<div style="margin-top: 15px; padding: 10px; background: #f0f0f1; border-left: 4px solid #2271b1;">
-					<p style="margin: 0 0 8px 0;">
-						<strong><?php esc_html_e( 'Developer Reference:', 'cpt-taxonomy-syncer' ); ?></strong>
-					</p>
-					<p style="margin: 0; font-family: monospace; font-size: 12px;">
-						<strong><?php esc_html_e( 'Term Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<code><?php echo esc_html( $meta_key ); ?></code>
-						<?php
-						$term_meta_value = get_term_meta( $term->term_id, $meta_key, true );
-						if ( $term_meta_value ) {
-							echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' ' . esc_html( $term_meta_value ) . ')</span>';
-						}
-						?>
-						<br><br>
-						<strong><?php esc_html_e( 'Post Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<span class="description" style="display: block; margin-top: 4px; font-size: 11px; color: #646970;">
-							<?php esc_html_e( 'Stored on the parent post (CPT) to define custom order of related posts.', 'cpt-taxonomy-syncer' ); ?>
-						</span>
-						<code><?php echo esc_html( CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy ); ?></code>
-						<?php
-						if ( $linked_post_id ) {
-							$post_meta_value = get_post_meta( $linked_post_id, CPT_TAX_SYNCER_META_PREFIX_TERM . $taxonomy, true );
-							if ( $post_meta_value ) {
-								echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' ' . esc_html( $post_meta_value ) . ')</span>';
-							}
-						}
-						?>
-						<br><br>
-						<strong><?php esc_html_e( 'Custom Order Meta Key:', 'cpt-taxonomy-syncer' ); ?></strong><br>
-						<span class="description" style="display: block; margin-top: 4px; font-size: 11px; color: #646970;">
-							<?php esc_html_e( 'Stored on the parent post (CPT) to define custom order of related posts.', 'cpt-taxonomy-syncer' ); ?>
-						</span>
-						<code><?php echo esc_html( '_cpt_tax_syncer_relationship_order_' . $taxonomy ); ?></code>
-						<?php
-						if ( $linked_post_id ) {
-							$order_meta_key = '_cpt_tax_syncer_relationship_order_' . $taxonomy;
-							$order_value    = get_post_meta( $linked_post_id, $order_meta_key, true );
-							if ( $order_value && is_array( $order_value ) ) {
-								echo ' <span class="description" style="font-size: 11px; color: #646970;">(' . esc_html__( 'Value:', 'cpt-taxonomy-syncer' ) . ' [' . esc_html( implode( ', ', $order_value ) ) . '])</span>';
-							}
-						}
-						?>
-						
-					</p>
-				</div>
+	/**
+	 * The placeholder row shown when no pair is configured.
+	 */
+	private function render_no_pairs_row(): void {
+		?>
+		<tr class="cpt-tax-syncer-no-pairs">
+			<td colspan="4"><?php esc_html_e( 'No pairs configured yet.', 'cpt-taxonomy-syncer' ); ?></td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * One editable pair row (also the template rows added by the script are cloned from).
+	 *
+	 * @param string                   $index      Row index, or the `{{index}}` placeholder.
+	 * @param CPT_Tax_Syncer_Pair|null $pair       The pair, or null for an empty row.
+	 * @param WP_Post_Type[]           $post_types Public post types.
+	 * @param WP_Taxonomy[]            $taxonomies Public taxonomies.
+	 */
+	private function render_pair_row( string $index, ?CPT_Tax_Syncer_Pair $pair, array $post_types, array $taxonomies ): void {
+		$name_prefix = CPT_TAX_SYNCER_OPTION_NAME . '[' . $index . ']';
+		$id_prefix   = 'cpt-tax-syncer-pair-' . $index;
+		?>
+		<tr>
+			<td>
+				<label class="screen-reader-text" for="<?php echo esc_attr( $id_prefix ); ?>-cpt"><?php esc_html_e( 'Custom Post Type', 'cpt-taxonomy-syncer' ); ?></label>
+				<select id="<?php echo esc_attr( $id_prefix ); ?>-cpt" name="<?php echo esc_attr( $name_prefix ); ?>[cpt_slug]" required>
+					<option value=""><?php esc_html_e( 'Select a post type', 'cpt-taxonomy-syncer' ); ?></option>
+					<?php foreach ( $post_types as $post_type ) : ?>
+						<option value="<?php echo esc_attr( $post_type->name ); ?>" <?php selected( $pair ? $pair->cpt_slug : '', $post_type->name ); ?>>
+							<?php echo esc_html( $post_type->label ); ?> (<?php echo esc_html( $post_type->name ); ?>)
+						</option>
+					<?php endforeach; ?>
+				</select>
+			</td>
+			<td>
+				<label class="screen-reader-text" for="<?php echo esc_attr( $id_prefix ); ?>-taxonomy"><?php esc_html_e( 'Taxonomy', 'cpt-taxonomy-syncer' ); ?></label>
+				<select id="<?php echo esc_attr( $id_prefix ); ?>-taxonomy" name="<?php echo esc_attr( $name_prefix ); ?>[taxonomy_slug]" required>
+					<option value=""><?php esc_html_e( 'Select a taxonomy', 'cpt-taxonomy-syncer' ); ?></option>
+					<?php foreach ( $taxonomies as $taxonomy ) : ?>
+						<option value="<?php echo esc_attr( $taxonomy->name ); ?>" <?php selected( $pair ? $pair->taxonomy_slug : '', $taxonomy->name ); ?>>
+							<?php echo esc_html( $taxonomy->label ); ?> (<?php echo esc_html( $taxonomy->name ); ?>)
+						</option>
+					<?php endforeach; ?>
+				</select>
+			</td>
+			<td>
+				<input type="checkbox" id="<?php echo esc_attr( $id_prefix ); ?>-redirect" name="<?php echo esc_attr( $name_prefix ); ?>[enable_redirect]" value="1" <?php checked( $pair && $pair->enable_redirect ); ?>>
+				<label class="screen-reader-text" for="<?php echo esc_attr( $id_prefix ); ?>-redirect"><?php esc_html_e( 'Redirect Archive', 'cpt-taxonomy-syncer' ); ?></label>
+			</td>
+			<td>
+				<button type="button" class="button cpt-tax-syncer-remove-pair"><?php esc_html_e( 'Remove', 'cpt-taxonomy-syncer' ); ?></button>
 			</td>
 		</tr>
 		<?php
 	}
 
 	/**
-	 * Add relationship dashboard pages under post type menus
-	 */
-	public function add_relationship_dashboard_pages() {
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-
-		foreach ( $pairs as $pair ) {
-			$cpt_slug      = $pair['cpt_slug'];
-			$taxonomy_slug = $pair['taxonomy_slug'];
-
-			$post_type_object = get_post_type_object( $cpt_slug );
-			if ( ! $post_type_object ) {
-				continue;
-			}
-
-			// Get the menu slug for this post type.
-			$menu_slug = 'edit.php';
-			if ( 'post' !== $cpt_slug ) {
-				$menu_slug = 'edit.php?post_type=' . $cpt_slug;
-			}
-
-			// Add submenu page under the post type menu.
-			$submenu_slug = 'cpt-tax-syncer-relationships-' . $cpt_slug;
-			add_submenu_page(
-				$menu_slug,
-				sprintf(
-					/* translators: %s: Post type name */
-					__( 'Relationships - %s', 'cpt-taxonomy-syncer' ),
-					$post_type_object->labels->name
-				),
-				__( 'Relationships', 'cpt-taxonomy-syncer' ),
-				$post_type_object->cap->edit_posts,
-				$submenu_slug,
-				function () use ( $cpt_slug ) {
-					// Pass post type directly to avoid extraction issues.
-					$this->render_post_type_relationships_page( $cpt_slug );
-				}
-			);
-		}
-	}
-
-	/**
-	 * Render post type relationships dashboard page
+	 * The Manual Sync table with a button per direction for each pair.
 	 *
-	 * @param string $post_type The post type slug.
+	 * @param CPT_Tax_Syncer_Pair[] $pairs Configured pairs.
 	 */
-	public function render_post_type_relationships_page( $post_type = '' ) {
-		// If post type not provided, try to extract from screen ID (fallback).
-		if ( ! $post_type ) {
-			$screen = get_current_screen();
-			if ( $screen ) {
-				// Extract post type from page slug: {post_type}_page_cpt-tax-syncer-relationships-{post_type}.
-				$page_slug = $screen->id;
-				$post_type = str_replace( '_page_cpt-tax-syncer-relationships-', '', $page_slug );
-				$post_type = str_replace( 'cpt-tax-syncer-relationships-', '', $post_type );
-
-				// If still contains underscores, try to extract from the end.
-				if ( strpos( $post_type, '_' ) !== false ) {
-					$parts     = explode( '_', $post_type );
-					$post_type = end( $parts );
-				}
-			}
+	private function render_manual_sync_table( array $pairs ): void {
+		if ( empty( $pairs ) ) {
+			return;
 		}
-
-		if ( ! $post_type ) {
-			wp_die( esc_html__( 'Unable to determine post type.', 'cpt-taxonomy-syncer' ) );
-		}
-
-		// Get the pair for this post type.
-		$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-		$pair  = null;
-		foreach ( $pairs as $p ) {
-			if ( $p['cpt_slug'] === $post_type ) {
-				$pair = $p;
-				break;
-			}
-		}
-
-		if ( ! $pair ) {
-			wp_die( esc_html__( 'No relationship configuration found for this post type.', 'cpt-taxonomy-syncer' ) );
-		}
-
-		$post_type_object = get_post_type_object( $post_type );
-		if ( ! $post_type_object ) {
-			wp_die( esc_html__( 'Invalid post type.', 'cpt-taxonomy-syncer' ) );
-		}
-
 		?>
-		<div class="wrap">
-			<h1>
-				<?php
-				printf(
-					/* translators: %s: Post type name */
-					esc_html__( 'Relationships - %s', 'cpt-taxonomy-syncer' ),
-					esc_html( $post_type_object->labels->name )
-				);
-				?>
-			</h1>
-			<p>
-				<?php
-				printf(
-					/* translators: %1$s: Post type name, %2$s: Taxonomy name */
-					esc_html__( 'View posts of type %1$s and their related posts through the %2$s taxonomy.', 'cpt-taxonomy-syncer' ),
-					'<strong>' . esc_html( $post_type_object->labels->name ) . '</strong>',
-					'<strong>' . esc_html( $pair['taxonomy_slug'] ) . '</strong>'
-				);
-				?>
-			</p>
-			<p class="description">
-				<?php
-				printf(
-					/* translators: %s: Meta key name */
-					esc_html__( 'Custom order meta key: %s', 'cpt-taxonomy-syncer' ),
-					'<code>_cpt_tax_syncer_relationship_order_' . esc_html( $pair['taxonomy_slug'] ) . '</code>'
-				);
-				?>
-			</p>
-			<div
-				id="cpt-tax-post-type-relationships-dashboard"
-				data-post-type="<?php echo esc_attr( $post_type ); ?>"
-				data-taxonomy="<?php echo esc_attr( $pair['taxonomy_slug'] ); ?>"
-			></div>
+		<h2><?php esc_html_e( 'Manual Sync', 'cpt-taxonomy-syncer' ); ?></h2>
+		<p><?php esc_html_e( 'Use these buttons to manually sync your post types and taxonomies.', 'cpt-taxonomy-syncer' ); ?></p>
+
+		<table class="widefat cpt-tax-syncer-manual-sync">
+			<?php $this->render_pairs_table_head(); ?>
+			<tbody>
+				<?php foreach ( $pairs as $pair ) : ?>
+					<tr>
+						<td><?php echo esc_html( $pair->cpt_slug ); ?></td>
+						<td><?php echo esc_html( $pair->taxonomy_slug ); ?></td>
+						<td><?php echo $pair->enable_redirect ? esc_html__( 'Yes', 'cpt-taxonomy-syncer' ) : esc_html__( 'No', 'cpt-taxonomy-syncer' ); ?></td>
+						<td>
+							<button type="button" class="button cpt-tax-syncer-sync-button" data-operation="<?php echo esc_attr( CPT_Taxonomy_Syncer::OPERATION_POSTS_TO_TERMS ); ?>" data-cpt="<?php echo esc_attr( $pair->cpt_slug ); ?>" data-taxonomy="<?php echo esc_attr( $pair->taxonomy_slug ); ?>">
+								<?php esc_html_e( 'Sync Posts to Terms', 'cpt-taxonomy-syncer' ); ?>
+							</button>
+							<button type="button" class="button cpt-tax-syncer-sync-button" data-operation="<?php echo esc_attr( CPT_Taxonomy_Syncer::OPERATION_TERMS_TO_POSTS ); ?>" data-cpt="<?php echo esc_attr( $pair->cpt_slug ); ?>" data-taxonomy="<?php echo esc_attr( $pair->taxonomy_slug ); ?>">
+								<?php esc_html_e( 'Sync Terms to Posts', 'cpt-taxonomy-syncer' ); ?>
+							</button>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+
+		<div id="cpt-tax-syncer-sync-result" class="notice cpt-tax-syncer-sync-result" role="status" aria-live="polite" hidden>
+			<p></p>
 		</div>
 		<?php
 	}

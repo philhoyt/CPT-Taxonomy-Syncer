@@ -21,25 +21,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Define plugin constants.
 define( 'CPT_TAXONOMY_SYNCER_VERSION', '1.4.4' );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-// Define meta key prefixes.
+// Meta key prefixes: the post holds its term ID, the term its post ID, the
+// parent post the saved order of its related posts.
 define( 'CPT_TAX_SYNCER_META_PREFIX_POST', '_post_id_' );
 define( 'CPT_TAX_SYNCER_META_PREFIX_TERM', '_term_id_' );
+define( 'CPT_TAX_SYNCER_META_PREFIX_ORDER', '_cpt_tax_syncer_relationship_order_' );
 
-// Define option name.
 define( 'CPT_TAX_SYNCER_OPTION_NAME', 'cpt_tax_syncer_pairs' );
 
-// Define default post status for synced posts.
+// Status given to posts the plugin creates, and the only status that creates terms by default.
 define( 'CPT_TAX_SYNCER_DEFAULT_POST_STATUS', 'publish' );
 
-// Define batch size for bulk operations.
 define( 'CPT_TAX_SYNCER_BATCH_SIZE', 100 );
 
-// Define cache TTL for relationship queries (15 minutes).
 define( 'CPT_TAX_SYNCER_CACHE_TTL', 15 * MINUTE_IN_SECONDS );
 
 // Plugin Update Checker — checks GitHub releases for updates.
@@ -54,50 +52,48 @@ $cpt_tax_syncer_update_checker = PucFactory::buildUpdateChecker(
 );
 $cpt_tax_syncer_update_checker->getVcsApi()->enableReleaseAssets();
 
-// Include required files.
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-pair.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-post-order.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-cache.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-taxonomy-support.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-cpt-tax-syncer.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-bulk-sync.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-rest-controller.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-batch-controller.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationships-controller.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin-columns.php';
+require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-admin-relationships-page.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-relationship-query.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-adjacent-post-blocks.php';
 
-// Include WP-CLI commands if WP-CLI is available.
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-wp-cli.php';
 }
 
 /**
- * Initialize the plugin
+ * Initialize the plugin.
+ *
+ * Runs on plugins_loaded, before any taxonomy is registered on init, so the
+ * register_taxonomy_args filter each pair adds sees every registration.
  */
 function cpt_taxonomy_syncer_init() {
-	// Get configured CPT/taxonomy pairs from options.
-	$pairs = get_option( CPT_TAX_SYNCER_OPTION_NAME, array() );
-
-	// Initialize each pair.
-	foreach ( $pairs as $pair ) {
-		$cpt_slug        = $pair['cpt_slug'];
-		$taxonomy_slug   = $pair['taxonomy_slug'];
-		$enable_redirect = isset( $pair['enable_redirect'] ) ? (bool) $pair['enable_redirect'] : false;
-
-		// Initialize core syncing.
-		CPT_Taxonomy_Syncer::get_instance( $cpt_slug, $taxonomy_slug, $enable_redirect );
-
-		// Initialize REST API controller.
-		new CPT_Tax_Syncer_REST_Controller( $cpt_slug, $taxonomy_slug );
+	foreach ( CPT_Tax_Syncer_Pair::all() as $pair ) {
+		CPT_Taxonomy_Syncer::get_instance( $pair );
+		new CPT_Tax_Syncer_Taxonomy_Support( $pair );
 	}
 
-	// Initialize admin.
+	CPT_Tax_Syncer_Relationship_Cache::register_hooks();
+	CPT_Tax_Syncer_REST_Controller::register_term_filters();
+
 	new CPT_Tax_Syncer_Admin();
-
-	// Initialize relationship query handler.
+	new CPT_Tax_Syncer_Admin_Columns();
+	new CPT_Tax_Syncer_Admin_Relationships_Page();
 	new CPT_Tax_Syncer_Relationship_Query();
-
-	// Initialize adjacent post blocks.
 	new CPT_Tax_Syncer_Adjacent_Post_Blocks();
 }
+add_action( 'plugins_loaded', 'cpt_taxonomy_syncer_init' );
 
-// Register global REST API routes (only once).
-add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_REST_Controller', 'register_global_routes' ), 10 );
-
-// Register the initialization hook.
-add_action( 'init', 'cpt_taxonomy_syncer_init' );
+add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_REST_Controller', 'register_routes' ) );
+add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_Batch_Controller', 'register_routes' ) );
+add_action( 'rest_api_init', array( 'CPT_Tax_Syncer_Relationships_Controller', 'register_routes' ) );

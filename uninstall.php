@@ -10,19 +10,41 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-// Delete plugin options.
-delete_option( 'cpt_tax_syncer_pairs' );
+/**
+ * Removes the plugin's options and transients from the current site.
+ *
+ * The relationship meta on posts and terms (_term_id_{taxonomy},
+ * _post_id_{post_type}, _cpt_tax_syncer_relationship_order_{taxonomy}) is
+ * left in place on purpose: the links stay valid without the plugin, other
+ * code may read them, and a reinstall picks them up again. Deleting them is
+ * a manual step.
+ */
+function cpt_tax_syncer_uninstall_site() {
+	global $wpdb;
 
-// Delete legacy option (from unused admin/settings.php if it exists).
-delete_option( 'cpt_taxonomy_syncer_pairs' );
+	delete_option( 'cpt_tax_syncer_pairs' );
+	// Option written by releases before 2025-11-20 (admin/settings.php, removed in fc1fa76); keep deleting it for sites that upgraded.
+	delete_option( 'cpt_taxonomy_syncer_pairs' );
+	delete_option( 'cpt_tax_syncer_cache_version' );
 
-// Note: We intentionally do NOT delete the meta fields (_post_id_{cpt} and _term_id_{taxonomy})
-// because:
-// 1. The relationships may still be valid even without the plugin
-// 2. Users may want to preserve the relationships if they reinstall the plugin
-// 3. Deleting meta could break existing functionality that depends on these relationships
-// If you want to clean up meta fields, you would need to:
-// - Get all configured pairs before deleting the option
-// - Loop through all posts of each CPT and delete _term_id_{taxonomy} meta
-// - Loop through all terms of each taxonomy and delete _post_id_{cpt} meta
-// This is intentionally left as a manual cleanup step if needed.
+	// Relationship cache (cpt_tax_syncer_rel_*) and batch records (cpt_tax_sync_batch_*).
+	foreach ( array( 'cpt_tax_syncer_rel_', 'cpt_tax_sync_batch_' ) as $prefix ) {
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transients cannot be deleted by prefix through the API.
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+				$wpdb->esc_like( '_transient_' . $prefix ) . '%',
+				$wpdb->esc_like( '_transient_timeout_' . $prefix ) . '%'
+			)
+		);
+	}
+}
+
+if ( is_multisite() ) {
+	foreach ( get_sites( array( 'fields' => 'ids' ) ) as $cpt_tax_syncer_site_id ) {
+		switch_to_blog( $cpt_tax_syncer_site_id );
+		cpt_tax_syncer_uninstall_site();
+		restore_current_blog();
+	}
+} else {
+	cpt_tax_syncer_uninstall_site();
+}
