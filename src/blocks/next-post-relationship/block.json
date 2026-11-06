@@ -2,7 +2,7 @@
 	"$schema": "https://schemas.wp.org/trunk/block.json",
 	"apiVersion": 3,
 	"name": "cpt-tax-syncer/next-post-relationship",
-	"version": "1.4.4",
+	"version": "2.0.0",
 	"title": "Next Post (Relationship)",
 	"category": "design",
 	"icon": "arrow-right-alt2",

@@ -3,7 +3,7 @@
  * Plugin Name: CPT-Taxonomy Syncer
  * Plugin URI:        https://github.com/philhoyt/CPT-Taxonomy-Syncer
  * Description: Automatically syncs a custom post type with a taxonomy
- * Version: 1.4.4
+ * Version: 2.0.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Tested up to: 7.1
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CPT_TAXONOMY_SYNCER_VERSION', '1.4.4' );
+define( 'CPT_TAXONOMY_SYNCER_VERSION', '2.0.0' );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CPT_TAXONOMY_SYNCER_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -45,12 +45,18 @@ require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-
 
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
-$cpt_tax_syncer_update_checker = PucFactory::buildUpdateChecker(
+$cpt_tax_syncer_update_checker     = PucFactory::buildUpdateChecker(
 	'https://github.com/philhoyt/CPT-Taxonomy-Syncer/',
 	__FILE__,
 	'cpt-taxonomy-syncer'
 );
-$cpt_tax_syncer_update_checker->getVcsApi()->enableReleaseAssets();
+$cpt_tax_syncer_update_checker_api = $cpt_tax_syncer_update_checker->getVcsApi();
+if ( method_exists( $cpt_tax_syncer_update_checker_api, 'enableReleaseAssets' ) ) {
+	// Only a .zip asset counts, and a release without one is skipped. The
+	// default PREFER_RELEASE_ASSETS falls back to GitHub's source archive,
+	// which installs as <Repo>-<tag>/ and breaks the plugin directory.
+	$cpt_tax_syncer_update_checker_api->enableReleaseAssets( '/\.zip$/', $cpt_tax_syncer_update_checker_api::REQUIRE_RELEASE_ASSETS );
+}
 
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-pair.php';
 require_once CPT_TAXONOMY_SYNCER_PLUGIN_DIR . 'includes/class-post-order.php';

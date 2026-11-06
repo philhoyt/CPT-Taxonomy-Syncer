@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.4.4
+Stable tag: 2.0.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -94,7 +94,8 @@ Do not use `wp cpt-tax-syncer cleanup` for this. That command permanently delete
 
 == Changelog ==
 
-= Unreleased =
+= 2.0.0 =
+* Fixed the update checker accepting any release asset and falling back to the GitHub source archive; it now installs only the release zip and skips a release without one.
 * Fixed editing a term wiping the linked post's content: only the title follows the term now, and the description is copied only when the `cpt_tax_syncer_sync_term_description` filter opts in.
 * Fixed forcing REST support on a paired taxonomy wiping its labels, rewrite settings and other registration arguments. The plugin now bootstraps on `plugins_loaded`, so the `register_taxonomy_args` filter sees every registration.
 * Fixed the `/create-post` and `/create-term` REST routes letting any user with `edit_posts` publish into any post type or taxonomy. They now require the post type's `publish_posts` or the taxonomy's `manage_terms` capability and only accept a configured pair.
@@ -181,6 +182,9 @@ Do not use `wp cpt-tax-syncer cleanup` for this. That command permanently delete
 * REST endpoints for batch processing.
 
 == Upgrade Notice ==
+
+= 2.0.0 =
+Drafts, pending and private posts no longer create terms, deleting a term now trashes its post, and editing a term no longer overwrites the post content. The create REST routes require the post type's publish capability. Add a filter on `cpt_tax_syncer_synced_post_statuses` if you relied on drafts creating terms.
 
 = 1.3.0 =
 Fixes a fatal error on uninstall, duplicate REST routes with multiple pairs, sync failures after a term name conflict, and multi-pair sync lockout. Update recommended.
