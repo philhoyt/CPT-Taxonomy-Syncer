@@ -1,4 +1,5 @@
 /.claude
+/.git
 /.vscode
 /_playground
 /src
@@ -27,10 +28,8 @@
 /package-lock.json
 /.gitignore
 /.distignore
-/.editorconfig
 /plans
 .DS_Store
 BUILD.md
 TESTING.md
 PLAYGROUND.md
-CONTRIBUTING.md
