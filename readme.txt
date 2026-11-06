@@ -4,7 +4,7 @@ Donate link: https://philhoyt.com
 Tags: custom-post-types, taxonomy, sync, query-loop, relationships
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 2.0.0
+Stable tag: 2.0.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -93,6 +93,9 @@ Do not use `wp cpt-tax-syncer cleanup` for this. That command permanently delete
 2. The Relationships screen for a post type, with related posts in a custom order.
 
 == Changelog ==
+
+= 2.0.1 =
+* Fixed the Query Loop custom order coming out reversed when another plugin, such as Advanced Query Loop, rewrites the block's sort order. The relationship query now runs after those filters and keeps an ascending order.
 
 = 2.0.0 =
 * Fixed the update checker accepting any release asset and falling back to the GitHub source archive; it now installs only the release zip and skips a release without one.

@@ -163,6 +163,63 @@ class Test_Relationship_Query extends WP_UnitTestCase {
 		$this->assertSame( array( 'p2' ), wp_list_pluck( $found, 'post_title' ) );
 	}
 
+	public function test_custom_order_keeps_an_ascending_order_var(): void {
+		update_post_meta(
+			$this->parent,
+			'_cpt_tax_syncer_relationship_order_' . CPT_TAX_SYNCER_TEST_TAX,
+			array( $this->related['p3'], $this->related['p1'], $this->related['p2'] )
+		);
+
+		$vars = apply_filters(
+			'query_loop_block_query_vars',
+			array(
+				'post_type'      => 'post',
+				'posts_per_page' => 10,
+				'orderby'        => 'menu_order',
+				'order'          => 'DESC',
+			),
+			$this->block_with_query(
+				array(
+					'postType'              => 'post',
+					'useSyncedRelationship' => true,
+					'useCustomOrder'        => true,
+				)
+			),
+			1
+		);
+
+		$this->assertSame( 'ASC', $vars['order'] );
+	}
+
+	public function test_custom_order_wins_over_a_later_orderby_filter(): void {
+		update_post_meta(
+			$this->parent,
+			'_cpt_tax_syncer_relationship_order_' . CPT_TAX_SYNCER_TEST_TAX,
+			array( $this->related['p3'], $this->related['p1'], $this->related['p2'] )
+		);
+		// Advanced Query Loop rewrites orderby from the block attributes at the default priority.
+		add_filter(
+			'query_loop_block_query_vars',
+			static function ( $query ) {
+				$query['orderby'] = 'menu_order';
+				return $query;
+			},
+			10
+		);
+
+		$vars  = $this->query_vars_for(
+			array(
+				'postType'              => 'post',
+				'useSyncedRelationship' => true,
+				'useCustomOrder'        => true,
+			)
+		);
+		$found = ( new WP_Query( $vars ) )->posts;
+
+		$this->assertSame( 'post__in', $vars['orderby'] );
+		$this->assertSame( array( 'p3', 'p1', 'p2' ), wp_list_pluck( $found, 'post_title' ) );
+	}
+
 	public function test_a_parent_without_a_term_returns_nothing(): void {
 		delete_post_meta( $this->parent, CPT_TAX_SYNCER_META_PREFIX_TERM . CPT_TAX_SYNCER_TEST_TAX );
 

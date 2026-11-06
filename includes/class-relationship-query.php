@@ -28,10 +28,17 @@ class CPT_Tax_Syncer_Relationship_Query {
 	const SCRIPT_HANDLE = 'cpt-tax-syncer-relationship-query';
 
 	/**
+	 * Priority of the query-vars filter: late, so the relationship query and
+	 * its saved order win over other Query Loop plugins (Advanced Query Loop
+	 * rewrites `orderby` from the block attributes at the default priority).
+	 */
+	const FILTER_PRIORITY = 100;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
-		add_filter( 'query_loop_block_query_vars', array( $this, 'modify_query_vars' ), 10, 3 );
+		add_filter( 'query_loop_block_query_vars', array( $this, 'modify_query_vars' ), self::FILTER_PRIORITY, 3 );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_block_editor_assets' ) );
 	}
 
@@ -161,7 +168,11 @@ class CPT_Tax_Syncer_Relationship_Query {
 
 		$query_vars['post__in'] = $ordered_ids ? $ordered_ids : array( 0 );
 		$query_vars['orderby']  = 'post__in';
-		unset( $query_vars['order'], $query_vars['post__not_in'] );
+		// Keep an explicit ASC: WP_Query ignores `order` for post__in, but a
+		// later filter that swaps `orderby` back to a column would otherwise
+		// inherit WP_Query's DESC default and reverse the list.
+		$query_vars['order'] = 'ASC';
+		unset( $query_vars['post__not_in'] );
 
 		return $query_vars;
 	}
